@@ -1,0 +1,491 @@
+We want to create a desigin similar to  **Tensor Processing Unit (TPU)** or **Neural Compute Accelerator (NCA)**. Since "TPU" is strongly associated with Google, I'd use **Tensor Processing Engine (TPE)**.
+
+This gives us a clear identity without tying us to a specific company.
+
+---
+
+# High-Level Vision
+
+The accelerator is designed to accelerate the computational kernels used in modern transformer inference. It acts as a hardware coprocessor that receives commands from host software, fetches tensors from memory, performs computation, and writes results back.
+
+The architecture is intentionally modular so that new compute engines, memory features, and AI capabilities can be added over time.
+
+## System Overview
+
+```text
+                  +--------------------------------------+
+                  |          Host Software               |
+                  |  Runtime / Driver / Test Program     |
+                  +------------------+-------------------+
+                                     |
+                          MMIO Commands / Interrupts
+                                     |
+                                     v
++-----------------------------------------------------------------------+
+|                    Tensor Processing Engine (TPE)                     |
+|                                                                       |
+|  +----------------+      +------------------------+                   |
+|  | Command        |----->| Instruction Scheduler  |                   |
+|  | Processor      |      +-----------+------------+                   |
+|  +----------------+                  |                                |
+|                                      |                                |
+|                     +----------------+----------------+               |
+|                     |                                 |               |
+|              +------+-------+                 +-------+------+        |
+|              | DMA Engine   |                 | Performance  |        |
+|              +------+-------+                 | Monitor Unit |        |
+|                     |                         +--------------+        |
+|                     |                                         |
+|        +------------+----------------------+                  |
+|        |                                   |                  |
+|   +----+------+                     +------+-----+            |
+|   | Local SRAM |<------------------>| Matrix      |           |
+|   | (Scratchpad)|                   | Compute     |           |
+|   +----+------+                     | Engine      |           |
+|        |                            +------+-----+            |
+|        |                                   |                  |
+|        +-----------------------------------+                  |
+|                         Output Buffer                          |
++-----------------------------+----------------------------------+
+                              |
+                        AXI Memory Interface
+                              |
+                     External DDR Memory
+```
+
+This is the "chip."
+
+But **what happens inside?**
+
+---
+
+# Major Subsystems
+
+Instead of thinking "CPU," think of the accelerator as several cooperating hardware engines.
+
+## 1. Command Processor
+
+The Command Processor is the "front door" of the accelerator.
+
+It accepts requests from software.
+
+Example command:
+
+```
+Multiply Matrix A and Matrix B
+
+Store result in Tensor C
+
+Apply ReLU
+
+Signal completion
+```
+
+Responsibilities:
+
+* Decode commands
+* Configure hardware
+* Validate parameters
+* Launch execution
+* Generate interrupts
+
+---
+
+## 2. Instruction Scheduler
+
+The scheduler is the "brain."
+
+It decides:
+
+```
+DMA first?
+
+Compute first?
+
+Wait?
+
+Overlap?
+
+Prioritize?
+```
+
+The scheduler keeps every hardware unit busy.
+
+A good scheduler can improve throughput dramatically without changing the compute hardware.
+
+---
+
+## 3. DMA Engine
+
+Moving data is often more expensive than computing on it.
+
+The DMA engine fetches tensors from DDR into local SRAM without involving a CPU.
+
+```text
+DDR
+
+↓
+
+DMA
+
+↓
+
+Local SRAM
+
+↓
+
+Compute
+```
+
+It also writes results back asynchronously.
+
+Future versions could support:
+
+* double buffering
+* scatter-gather
+* prefetching
+
+---
+
+## 4. Local SRAM (Scratchpad)
+
+Unlike CPUs, AI accelerators often use managed scratchpad memories instead of caches.
+
+Why?
+
+Because tensor access patterns are predictable.
+
+Advantages:
+
+* deterministic latency
+* higher bandwidth
+* lower power
+* easier verification
+
+---
+
+## 5. Matrix Compute Engine
+
+This is the heart of the accelerator.
+
+Initially it supports:
+
+```
+C = A × B + C
+```
+
+This is GEMM (General Matrix Multiply), which underpins much of deep learning.
+
+Internally, it contains:
+
+```text
+Input Buffers
+
+↓
+
+MAC Array
+
+↓
+
+Accumulator
+
+↓
+
+Output Buffer
+```
+
+---
+
+## 6. MAC Array
+
+The MAC (Multiply-Accumulate) array performs:
+
+```
+A × B + Accumulator
+```
+
+Many MACs operate in parallel.
+
+Example:
+
+```
+16 × 16
+
+256 MACs
+```
+
+Later, you can scale to:
+
+* 32×32
+* 64×64
+
+The interface stays the same.
+
+---
+
+## 7. Accumulator
+
+Intermediate sums are stored here.
+
+Example:
+
+```
+A × B
+
+↓
+
+Partial Sum
+
+↓
+
+Partial Sum
+
+↓
+
+Partial Sum
+
+↓
+
+Final Output
+```
+
+This allows large matrix operations to be broken into tiles.
+
+---
+
+## 8. Output Buffer
+
+Results are staged before DMA writes them back to memory.
+
+This decouples computation from memory transfers.
+
+---
+
+## 9. Performance Monitor Unit (PMU)
+
+This is one of the features that makes the project feel "production-quality."
+
+The PMU collects metrics such as:
+
+* cycles executed
+* MAC utilization
+* memory bandwidth
+* DMA wait time
+* scheduler stalls
+* idle cycles
+* command latency
+
+These metrics will later feed your AI Performance Agent.
+
+---
+
+## 10. Debug Infrastructure
+
+Every professional ASIC includes observability.
+
+We'll include:
+
+* command trace
+* hardware event logs
+* performance counters
+* error registers
+* assertion status
+* optional trace buffers
+
+This makes debugging practical.
+
+---
+
+# Software Flow
+
+Here's how software interacts with the accelerator.
+
+```text
+Application
+
+↓
+
+Runtime Library
+
+↓
+
+Driver
+
+↓
+
+MMIO Registers
+
+↓
+
+Command Processor
+
+↓
+
+Scheduler
+
+↓
+
+DMA
+
+↓
+
+Matrix Engine
+
+↓
+
+Completion Interrupt
+
+↓
+
+Application
+```
+
+Eventually, the runtime library could expose APIs like:
+
+```cpp
+tensor.matmul(A, B, C);
+tensor.relu(C);
+tensor.softmax(C);
+```
+
+---
+
+# Memory Flow
+
+One of the most important architectural aspects is the movement of data.
+
+```text
+DDR Memory
+
+↓
+
+DMA Engine
+
+↓
+
+Local SRAM
+
+↓
+
+Input Buffers
+
+↓
+
+MAC Array
+
+↓
+
+Accumulator
+
+↓
+
+Output Buffer
+
+↓
+
+DMA
+
+↓
+
+DDR
+```
+
+The goal is to keep the compute engine busy while DMA transfers the next tiles.
+
+---
+
+# Verification Architecture
+
+This is where your background becomes a major strength.
+
+We'll build a professional verification environment.
+
+```text
+RTL
+
+↓
+
+Testbench
+
+↓
+
+Assertions
+
+↓
+
+Scoreboard
+
+↓
+
+Coverage
+
+↓
+
+Regression
+
+↓
+
+Reports
+
+↓
+
+AI Agents
+```
+
+The AI agents don't replace verification—they augment it.
+
+---
+
+# Why this architecture is interesting
+
+This project isn't just about implementing hardware. It demonstrates **system-level engineering**:
+
+* Modular hardware blocks with well-defined interfaces.
+* A realistic memory hierarchy centered on scratchpad SRAM and DMA.
+* Performance instrumentation from day one.
+* Verification infrastructure designed alongside the RTL.
+* A clean path for AI agents to analyze regressions, performance, and debug data.
+
+That combination is uncommon in personal projects and aligns closely with the kinds of engineering practices used in modern accelerator teams.
+
+---
+
+# Planned Evolution
+
+I also want us to think about this as a roadmap rather than a fixed design.
+
+**Version 1**
+
+* Single matrix compute engine
+* DMA
+* Local SRAM
+* Command processor
+* Performance counters
+* Complete verification framework
+
+**Version 2**
+
+* Activation unit (ReLU, GELU)
+* Quantization support
+* Multiple DMA channels
+* Improved scheduler
+
+**Version 3**
+
+* Attention-specific operations
+* Layer normalization
+* Multi-engine execution
+* Memory optimizations (double buffering, tiling enhancements)
+
+**Version 4**
+
+* AI-powered engineering tools:
+
+  * Waveform Debug Agent
+  * Regression Analysis Agent
+  * Coverage Closure Agent
+  * Performance Optimization Agent
+  * Documentation Agent
+
+This progression lets the repository grow naturally while giving you multiple opportunities to showcase both hardware and AI engineering skills over time.
+

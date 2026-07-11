@@ -1,0 +1,67 @@
+# TPE Coverage Plan
+
+Companion to [`test_plan.md`](test_plan.md) section 4 (coverage goals/exit
+criteria). This document defines *how* coverage is modeled and measured, and
+is the place each block's covergroup/coverpoint bins get enumerated as they
+land.
+
+## 1. Coverage kinds and tooling
+
+| Kind | Tool | Flag(s) | Merged by |
+|---|---|---|---|
+| Line | Verilator | `--coverage-line` | `verilator_coverage --write` via `tools/cov_merge.py` |
+| Toggle | Verilator | `--coverage-toggle` | same |
+| Branch | Verilator | (bundled with line coverage) | same |
+| Functional (RTL-side covergroups) | Verilator | `--coverage-user` | same `coverage.dat`, annotated with `verilator_coverage -annotate` |
+| Functional/cross (testbench-side) | `cocotb-coverage` (`CoverPoint`/`CoverCross`) | N/A (Python) | `tools/cov_merge.py` reads each test's exported coverage DB and sums bins |
+| FSM state/arc | SV covergroup on the block's state register (RTL-side) | `--coverage-user` | same as functional |
+
+**Do not pass Verilator's blanket `--coverage` flag** -- combined with a
+concurrent SVA assertion using `|=>` or `disable iff`, Verilator 5.050 hits
+an internal compiler bug (`V3Localize.cpp:203, AstVarRef not under
+function`). Always request the three kinds explicitly
+(`--coverage-line --coverage-toggle --coverage-user`), which is functionally
+equivalent and does not trigger the bug. See
+`verif/cocotb_tb/smoke/Makefile` for the reference invocation.
+
+## 2. Bin naming convention
+
+`<block>.<coverpoint>.<bin>`, e.g. `matrix_engine.tile_dim_m.boundary_max`.
+Cross coverage bins concatenate with `x`:
+`matrix_engine.tile_dim_m x saturation.hit`. This keeps merged reports
+greppable and lets `tools/cov_merge.py` produce a per-block rollup without
+parsing tool-specific naming.
+
+## 3. Per-block coverage models
+
+Filled in as each block's testbench lands (mirrors the milestone order in
+the top-level plan/README).
+
+### 3.1 Local SRAM (M1)
+_TBD when M1 lands._
+
+### 3.2 Matrix Compute Engine (M2)
+_TBD when M2 lands._
+
+### 3.3 DMA Engine (M3)
+_TBD when M3 lands._
+
+### 3.4 Command Processor / Scheduler (M4)
+_TBD when M4 lands._
+
+### 3.5 PMU / Debug (M5)
+_TBD when M5 lands._
+
+## 4. Coverage closure process
+
+1. `tools/regression.py` runs a suite; each test's simulator invocation
+   writes its own `coverage.dat` (Verilator) and `.cocotb_coverage` DB
+   (cocotb-coverage) under `sim/logs/<suite>/<test>/`.
+2. `tools/cov_merge.py --suite <name>` merges all of those into
+   `sim/logs/<suite>/merged_coverage.dat` (Verilator side) and a summed
+   Python coverage-DB (functional side), then renders a single HTML/text
+   summary.
+3. Gaps are triaged: either add a directed test (`verif/testlists/`), add a
+   random-generator constraint (`tools/gen_tests.py`), or -- rarely -- waive
+   a genuinely unreachable bin with a documented reason in the block's
+   section above.

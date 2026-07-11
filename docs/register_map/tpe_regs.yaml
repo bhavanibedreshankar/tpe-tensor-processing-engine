@@ -1,0 +1,279 @@
+# TPE MMIO register map -- SOURCE OF TRUTH.
+#
+# tools/regmap_gen.py reads this file and generates:
+#   rtl/include/tpe_regs_pkg.sv     (SV localparams: absolute offsets, field
+#                                     bit ranges, reset values)
+#   model/include/tpe_regs.h        (matching C++ constexpr header, used by
+#                                     both the golden reference model and the
+#                                     pyuvm register-access sequences)
+#   docs/register_map/generated/register_map.md (human-readable tables)
+#
+# Do not hand-edit the generated files -- edit this YAML and re-run
+# `make regmap` (or `python3 tools/regmap_gen.py`).
+#
+# access legend: RO = read-only (HW drives), RW = read/write (SW drives),
+# WO = write-only (reads as 0), RW1C = read/write-1-to-clear (SW writes 1 to
+# clear a set bit; HW sets).
+
+device: tpe
+address_width: 16
+data_width: 32
+description: >
+  Tensor Processing Engine MMIO register space, accessed by the host over an
+  AXI4-Lite port terminating in the Command Processor. Each block below owns
+  a 4KB-aligned window.
+
+blocks:
+  - name: cp
+    base_address: 0x0000
+    description: Command Processor -- control/status and command staging.
+    registers:
+      - name: VERSION
+        offset: 0x00
+        access: RO
+        reset: 0x00010000
+        description: "{MAJOR, MINOR} version of the TPE RTL."
+        fields:
+          - {name: MINOR, bits: "15:0", description: "Minor version"}
+          - {name: MAJOR, bits: "31:16", description: "Major version"}
+
+      - name: CTRL
+        offset: 0x04
+        access: RW
+        reset: 0x00000000
+        description: Top-level enable / soft reset.
+        fields:
+          - {name: ENABLE, bits: "0:0", description: "1 = CP accepts commands"}
+          - {name: SOFT_RESET, bits: "1:1", description: "1 = pulse to reset CP/scheduler datapath"}
+
+      - name: STATUS
+        offset: 0x08
+        access: RO
+        reset: 0x00000004
+        description: Command Processor status.
+        fields:
+          - {name: BUSY, bits: "0:0", description: "1 = a command is executing"}
+          - {name: CMD_FIFO_FULL, bits: "1:1"}
+          - {name: CMD_FIFO_EMPTY, bits: "2:2"}
+          - {name: ERROR, bits: "3:3", description: "1 = last command completed with STAT != OK"}
+          - {name: LAST_STATUS, bits: "6:4", description: "cmd_status_e of the last completed command"}
+
+      - name: CMD_OPCODE_TAG
+        offset: 0x10
+        access: RW
+        reset: 0x00000000
+        description: Staged command opcode + caller tag (see tpe_pkg::cmd_opcode_e).
+        fields:
+          - {name: OPCODE, bits: "3:0"}
+          - {name: TAG, bits: "15:4"}
+
+      - name: CMD_SRAM_ADDR
+        offset: 0x14
+        access: RW
+        reset: 0x00000000
+        description: Staged scratchpad address operand.
+
+      - name: CMD_MEM_ADDR
+        offset: 0x18
+        access: RW
+        reset: 0x00000000
+        description: Staged DDR (AXI) address operand.
+
+      - name: CMD_DIM_MK
+        offset: 0x1C
+        access: RW
+        reset: 0x00000000
+        description: Staged tile M/K dimensions.
+        fields:
+          - {name: DIM_M, bits: "15:0"}
+          - {name: DIM_K, bits: "31:16"}
+
+      - name: CMD_DIM_N
+        offset: 0x20
+        access: RW
+        reset: 0x00000000
+        description: Staged tile N dimension.
+        fields:
+          - {name: DIM_N, bits: "15:0"}
+
+      - name: CMD_PUSH
+        offset: 0x24
+        access: WO
+        reset: 0x00000000
+        description: Write 1 to atomically push the staged command into the command FIFO.
+        fields:
+          - {name: PUSH, bits: "0:0"}
+
+      - name: IRQ_STATUS
+        offset: 0x30
+        access: RW1C
+        reset: 0x00000000
+        description: Interrupt status, write-1-to-clear.
+        fields:
+          - {name: CMD_DONE, bits: "0:0"}
+          - {name: CMD_ERROR, bits: "1:1"}
+
+      - name: IRQ_ENABLE
+        offset: 0x34
+        access: RW
+        reset: 0x00000000
+        description: Interrupt enable mask (same bit layout as IRQ_STATUS).
+        fields:
+          - {name: CMD_DONE_EN, bits: "0:0"}
+          - {name: CMD_ERROR_EN, bits: "1:1"}
+
+  - name: dma
+    base_address: 0x1000
+    description: DMA Engine -- descriptor-based DDR <-> SRAM mover.
+    registers:
+      - name: CTRL
+        offset: 0x00
+        access: RW
+        reset: 0x00000000
+        fields:
+          - {name: ENABLE, bits: "0:0"}
+
+      - name: STATUS
+        offset: 0x04
+        access: RO
+        reset: 0x00000001
+        fields:
+          - {name: IDLE, bits: "0:0"}
+          - {name: ERROR, bits: "1:1"}
+
+      - name: DESC_MEM_ADDR
+        offset: 0x10
+        access: RW
+        reset: 0x00000000
+        description: DDR-side address for the in-flight descriptor.
+
+      - name: DESC_SRAM_ADDR
+        offset: 0x14
+        access: RW
+        reset: 0x00000000
+        description: SRAM-side address for the in-flight descriptor.
+
+      - name: DESC_LEN
+        offset: 0x18
+        access: RW
+        reset: 0x00000000
+        description: Transfer length in bytes.
+
+      - name: DESC_CTRL
+        offset: 0x1C
+        access: RW
+        reset: 0x00000000
+        fields:
+          - {name: DIR, bits: "0:0", description: "0 = DDR->SRAM, 1 = SRAM->DDR"}
+          - {name: START, bits: "1:1", description: "write 1 to kick off the descriptor"}
+
+  - name: matrix_engine
+    base_address: 0x2000
+    description: Matrix Compute Engine (MAC array + accumulator) configuration.
+    registers:
+      - name: CTRL
+        offset: 0x00
+        access: RW
+        reset: 0x00000000
+        fields:
+          - {name: START, bits: "0:0"}
+
+      - name: STATUS
+        offset: 0x04
+        access: RO
+        reset: 0x00000001
+        fields:
+          - {name: IDLE, bits: "0:0"}
+          - {name: OVERFLOW_STICKY, bits: "1:1", description: "accumulator saturated at least once"}
+
+      - name: DIM_MK
+        offset: 0x10
+        access: RW
+        reset: 0x00000000
+        fields:
+          - {name: DIM_M, bits: "15:0"}
+          - {name: DIM_K, bits: "31:16"}
+
+      - name: DIM_N
+        offset: 0x14
+        access: RW
+        reset: 0x00000000
+        fields:
+          - {name: DIM_N, bits: "15:0"}
+
+  - name: pmu
+    base_address: 0x3000
+    description: Performance Monitor Unit -- free-running event counters.
+    registers:
+      - name: CTRL
+        offset: 0x00
+        access: RW
+        reset: 0x00000000
+        fields:
+          - {name: ENABLE, bits: "0:0"}
+          - {name: RESET_COUNTERS, bits: "1:1"}
+
+      - name: CYCLE_COUNT
+        offset: 0x10
+        access: RO
+        reset: 0x00000000
+        description: Free-running cycle counter since last RESET_COUNTERS.
+
+      - name: MAC_ACTIVE_COUNT
+        offset: 0x14
+        access: RO
+        description: Cycles the MAC array produced a valid result.
+
+      - name: DMA_WAIT_COUNT
+        offset: 0x18
+        access: RO
+        description: Cycles the scheduler stalled waiting on DMA.
+
+      - name: SCHED_STALL_COUNT
+        offset: 0x1C
+        access: RO
+        description: Cycles the scheduler had work but could not issue.
+
+      - name: IDLE_COUNT
+        offset: 0x20
+        access: RO
+        description: Cycles with no in-flight command.
+
+      - name: CMD_LATENCY_LAST
+        offset: 0x24
+        access: RO
+        description: Cycle latency of the most recently completed command.
+
+  - name: debug
+    base_address: 0x4000
+    description: Debug infrastructure -- command trace buffer and error capture.
+    registers:
+      - name: CTRL
+        offset: 0x00
+        access: RW
+        reset: 0x00000000
+        fields:
+          - {name: TRACE_ENABLE, bits: "0:0"}
+
+      - name: TRACE_STATUS
+        offset: 0x04
+        access: RO
+        fields:
+          - {name: TRACE_EMPTY, bits: "0:0"}
+          - {name: TRACE_FULL, bits: "1:1"}
+          - {name: TRACE_COUNT, bits: "12:2"}
+
+      - name: TRACE_RDATA
+        offset: 0x08
+        access: RO
+        description: Pop the oldest trace entry (opcode/tag/status packed).
+
+      - name: ERROR_CODE
+        offset: 0x10
+        access: RO
+        description: cmd_status_e of the most recent error.
+
+      - name: ERROR_TAG
+        offset: 0x14
+        access: RO
+        description: Command tag associated with ERROR_CODE.

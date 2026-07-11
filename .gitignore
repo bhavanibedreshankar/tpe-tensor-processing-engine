@@ -1,0 +1,33 @@
+# Python venv / caches
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Simulation build/run outputs
+sim_build/
+sim/verilator/*
+sim/icarus/*
+sim/logs/*
+!sim/verilator/.gitkeep
+!sim/icarus/.gitkeep
+!sim/logs/.gitkeep
+results.xml
+coverage.dat
+merged_coverage.dat
+*.vcd
+*.fst
+*.fst.hier
+dump.vcd
+cov_annotate/
+coverage_html/
+regression_reports/
+
+# Verilator obj dirs
+obj_dir/
+
+# GTKWave save-state scratch
+*.gtkw.bak
+
+# macOS
+.DS_Store
