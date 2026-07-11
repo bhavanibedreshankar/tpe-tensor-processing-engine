@@ -38,7 +38,16 @@ Filled in as each block's testbench lands (mirrors the milestone order in
 the top-level plan/README).
 
 ### 3.1 Local SRAM (M1)
-_TBD when M1 lands._
+
+RTL-side (`verif/coverage/sram_cov.sv`, bound to `dp_ram`), per port:
+`cp_op` (idle/read/write), `cp_addr_region` (low/mid/high thirds),
+`cp_strb` (zero/full/partial, port A only), `cx_op_addr` (op x region
+cross). TB-side (`verif/cocotb_tb/sram/coverage.py`, cocotb-coverage):
+`sram.port_{a,b}.op_type`, `sram.port_{a,b}.addr_region`, and their cross
+-- deliberately mirrors the RTL-side bins so a gap in one is a signal to
+check the other, not just a documentation exercise. `sram_random_test`'s
+two disjoint address ranges are wide enough that the low/mid/high thirds
+each get hit on both ports.
 
 ### 3.2 Matrix Compute Engine (M2)
 _TBD when M2 lands._

@@ -43,6 +43,8 @@ lint: ## Lint all current RTL with verilator --lint-only
 		$(RTL_PKG) rtl/common/round_robin_arb.sv --top-module round_robin_arb
 	verilator --lint-only -Wall -Wno-DECLFILENAME -Wno-UNUSEDPARAM \
 		$(RTL_PKG) rtl/common/dp_ram.sv --top-module dp_ram
+	verilator --lint-only -Wall -Wno-DECLFILENAME -Wno-UNUSEDPARAM \
+		$(RTL_PKG) rtl/common/dp_ram.sv rtl/sram/tpe_sram.sv --top-module tpe_sram
 	@echo "lint OK"
 
 .PHONY: toolchain-smoke
@@ -52,12 +54,26 @@ toolchain-smoke: venv ## Run the cocotb+pyuvm+Verilator toolchain smoke test
 		$(MAKE) -C verif/cocotb_tb/smoke
 	@echo "toolchain smoke test PASSED"
 
+.PHONY: model
+model: ## Build the C++ golden-model CLI + run its unit tests
+	$(MAKE) -C model test
+	$(MAKE) -C model
+
+.PHONY: sim-sram
+sim-sram: venv model ## Run the Local SRAM testbench (M1)
+	source $(VENV)/bin/activate && \
+		$(MAKE) -C verif/cocotb_tb/sram clean-all && \
+		$(MAKE) -C verif/cocotb_tb/sram
+	@echo "sram testbench PASSED"
+
 .PHONY: clean
 clean: ## Remove simulation/build artifacts (keeps generated docs/register files)
 	find . -name sim_build -type d -not -path './.venv/*' -exec rm -rf {} + 2>/dev/null || true
 	find . -name '__pycache__' -type d -not -path './.venv/*' -exec rm -rf {} + 2>/dev/null || true
 	find . \( -name 'coverage.dat' -o -name 'dump.vcd' -o -name 'results.xml' \) -not -path './.venv/*' -delete 2>/dev/null || true
+	find . \( -name '*_coverage.xml' -o -name '*_scoreboard_work' \) -not -path './.venv/*' -exec rm -rf {} + 2>/dev/null || true
 	rm -rf verif/cocotb_tb/smoke/sim_build
+	$(MAKE) -C model clean
 	@echo "clean OK"
 
 .PHONY: distclean

@@ -116,7 +116,7 @@ against `bug_list.md`, not against a blanket "all green" expectation.
 Tracked here so nothing silently falls through the cracks as milestones
 land; each is removed once its milestone's section above is filled in.
 
-- [ ] Local SRAM detailed test list (M1)
+- [x] Local SRAM detailed test list (M1) -- see `verif/cocotb_tb/sram/README.md`
 - [ ] Matrix Compute Engine detailed test list (M2)
 - [ ] DMA Engine detailed test list (M3)
 - [ ] Command Processor / Scheduler detailed test list (M4)

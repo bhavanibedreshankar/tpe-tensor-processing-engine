@@ -30,6 +30,13 @@ module dp_ram #(
 
   logic [DATA_WIDTH-1:0] mem [DEPTH];
 
+  // Read-old-data on a same-cycle read+write to the same address: the
+  // nonblocking write to mem[] and the nonblocking read into *_rdata both
+  // use mem[]'s pre-this-edge value, so a same-address read-while-write
+  // returns the value from before this write (standard "READ_FIRST" BRAM
+  // behavior). Cross-port same-address write/write in the same cycle is
+  // not defined here (last physical write wins in simulation order) --
+  // testbenches should avoid it, and verif/sva/sram_sva.sv flags it.
   always_ff @(posedge clk) begin
     if (a_en) begin
       if (a_we) begin

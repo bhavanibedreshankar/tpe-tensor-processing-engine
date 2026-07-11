@@ -22,6 +22,11 @@ dump.vcd
 cov_annotate/
 coverage_html/
 regression_reports/
+*_coverage.xml
+*_scoreboard_work/
+
+# C++ golden model build outputs
+model/build/
 
 # Verilator obj dirs
 obj_dir/
