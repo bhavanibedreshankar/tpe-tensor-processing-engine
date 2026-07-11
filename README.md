@@ -13,7 +13,7 @@ licenses. See [Toolchain](#toolchain) below.
 
 ## Status
 
-Building incrementally, foundation first. Current state:
+All planned V1 milestones are complete:
 
 | Milestone | Scope | Status |
 |---|---|---|
@@ -24,10 +24,12 @@ Building incrementally, foundation first. Current state:
 | M4 | Command Processor + Scheduler + top-level integration | **done** (2 intentional bugs present, see bug catalog) |
 | M5 | Performance Monitor Unit + Debug infrastructure | **done** (1 intentional bug present, see bug catalog) |
 | M6 | Regression infrastructure (test generator, job scheduler, coverage merge, profiler, lint, CI) | **done** |
-| M7 | Bug catalog + full regression proof | not started |
+| M7 | Bug catalog + full regression proof | **done** -- 7 bugs cataloged; `sanity`/`smoke`/`daily`/`random` all proven clean (zero infra errors) across 224 test invocations, see bug catalog's "M7 final regression proof" |
 
-RTL is complete for V1 (M1-M5); M6 built the regression/CI tooling around
-it. This README is updated as each milestone completes.
+RTL, C++ golden model, verification environment, and regression/CI
+tooling are all complete for V1. See the [Roadmap](docs/architecture/tpe_architecture_spec.md#6-roadmap)
+for V2+ scope (activation unit, quantization, multi-channel DMA, improved
+scheduler, and beyond).
 
 ## Toolchain
 

@@ -19,6 +19,18 @@ overflow/timing-sensitive paths that random and directed edge-case tests
 exercise, exactly as a real regression suite would catch them (a passing
 smoke test does not mean a clean design).
 
+**M7 final regression proof** (all four tiers, `make sanity|smoke|daily|
+random`, repeated runs): `sanity` 6/6 pass (no bug-hunting tests in this
+tier by design); `smoke` 13 pass / 5 FAIL (bugs #3-#7, every directed
+bug-catching test in this tier, consistently); `daily` and `random` each
+60 pass / 40 FAIL (bugs #1/#2 firing on most `matmul_random_test` seeds,
+#4 firing on `dma_random_test` seeds landing on its trigger residue, plus
+every directed bug-catching test) -- consistent across every repeated run.
+Zero `ERROR`/`TIMEOUT` (infrastructure-health) results across all 224 test
+invocations (6+18+100+100) in this final pass. See
+`docs/flows/regression_flow.md` section 7 for the exact expected-FAIL
+breakdown this is checked against.
+
 | # | Block | File:Line | Symptom | Root cause | Caught by |
 |---|---|---|---|---|---|
 | 1 | matrix_engine | `rtl/matrix_engine/matrix_engine_ctrl.sv:154,166` | Wrong GEMM values whenever `dim_k < ROWS`; row `k_q` (one past the intended last row) spuriously contributes to the sum. Never fires when `dim_k == ROWS` (the array's full physical width), so a naive full-width smoke test would never catch it. | Off-by-one in the row-contribution gate: `(r <= k_q)` should be `(r < k_q)` (row indices are 0-based, so row index `k_q` is one past the last valid row `k_q-1`). | `matmul_random_test` (several iterations use `dim_k < ROWS`) |

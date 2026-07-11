@@ -1,7 +1,8 @@
 # Tensor Processing Engine (TPE) -- Architecture Specification
 
-Status: **V1 in progress** (see [Roadmap](#roadmap) and
-[Milestone tracking](../../overview) for scope boundaries).
+Status: **V1 complete** (see [Roadmap](#roadmap) and the top-level
+[README](../../README.md#status) for milestone tracking; V2+ scope
+boundaries below).
 
 This document is the RTL-facing architecture spec. For the original product
 vision see [`overview`](../../overview) at the repo root; this doc pins down
