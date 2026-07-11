@@ -50,7 +50,18 @@ two disjoint address ranges are wide enough that the low/mid/high thirds
 each get hit on both ports.
 
 ### 3.2 Matrix Compute Engine (M2)
-_TBD when M2 lands._
+
+RTL-side (`verif/coverage/matrix_engine_cov.sv`, bound to
+`matrix_engine_ctrl`): `cp_state`/`cp_arc` -- explicit FSM state and
+transition coverage over the 5-state control FSM (IDLE/LOAD_WEIGHTS/
+COMPUTE/DRAIN/DONE), satisfying the "FSM coverage" requirement directly
+against the RTL's own state encoding rather than a Python
+reimplementation; `cp_dim_k`/`cp_dim_n`/`cp_dim_m` -- tile-size bins
+(one/mid/max for k and n, narrow/wide for m) sampled on `start`;
+`cp_overflow_sticky` -- did this run see a saturating accumulation.
+SVA (`verif/sva/matrix_engine_sva.sv`): done pulses exactly one cycle,
+weight_load_row is one-hot0, start-time dims are in range, and
+`mac_array`'s result is never X when valid.
 
 ### 3.3 DMA Engine (M3)
 _TBD when M3 lands._

@@ -45,6 +45,9 @@ lint: ## Lint all current RTL with verilator --lint-only
 		$(RTL_PKG) rtl/common/dp_ram.sv --top-module dp_ram
 	verilator --lint-only -Wall -Wno-DECLFILENAME -Wno-UNUSEDPARAM \
 		$(RTL_PKG) rtl/common/dp_ram.sv rtl/sram/tpe_sram.sv --top-module tpe_sram
+	verilator --lint-only -Wall -Wno-DECLFILENAME -Wno-UNUSEDPARAM -Wno-UNUSEDSIGNAL -Wno-PINCONNECTEMPTY -Wno-UNSIGNED \
+		$(RTL_PKG) rtl/common/dp_ram.sv rtl/matrix_engine/pe.sv rtl/matrix_engine/mac_array.sv \
+		rtl/matrix_engine/matrix_engine_ctrl.sv rtl/matrix_engine/matrix_engine.sv --top-module matrix_engine
 	@echo "lint OK"
 
 .PHONY: toolchain-smoke
@@ -66,12 +69,18 @@ sim-sram: venv model ## Run the Local SRAM testbench (M1)
 		$(MAKE) -C verif/cocotb_tb/sram
 	@echo "sram testbench PASSED"
 
+.PHONY: sim-matrix-engine
+sim-matrix-engine: venv model ## Run the Matrix Compute Engine testbench (M2) -- 2/3 tests FAIL by design, see docs/verification/bug_list.md
+	source $(VENV)/bin/activate && \
+		$(MAKE) -C verif/cocotb_tb/matrix_engine clean-all && \
+		$(MAKE) -C verif/cocotb_tb/matrix_engine
+
 .PHONY: clean
 clean: ## Remove simulation/build artifacts (keeps generated docs/register files)
 	find . -name sim_build -type d -not -path './.venv/*' -exec rm -rf {} + 2>/dev/null || true
 	find . -name '__pycache__' -type d -not -path './.venv/*' -exec rm -rf {} + 2>/dev/null || true
 	find . \( -name 'coverage.dat' -o -name 'dump.vcd' -o -name 'results.xml' \) -not -path './.venv/*' -delete 2>/dev/null || true
-	find . \( -name '*_coverage.xml' -o -name '*_scoreboard_work' \) -not -path './.venv/*' -exec rm -rf {} + 2>/dev/null || true
+	find . \( -name '*_coverage.xml' -o -name '*_scoreboard_work' -o -name 'matmul_scoreboard_work' \) -not -path './.venv/*' -exec rm -rf {} + 2>/dev/null || true
 	rm -rf verif/cocotb_tb/smoke/sim_build
 	$(MAKE) -C model clean
 	@echo "clean OK"

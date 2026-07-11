@@ -6,7 +6,9 @@ CXXFLAGS := -std=c++17 -Wall -Wextra -Werror -Iinclude -O2
 BUILD_DIR := build
 
 SRC := src/main.cpp
-TEST_SRC := tests/test_scratchpad.cpp
+HEADERS := include/Scratchpad.hpp include/MacArray.hpp
+TEST_SRCS := tests/test_scratchpad.cpp tests/test_matmul.cpp
+TEST_BINS := $(patsubst tests/%.cpp,$(BUILD_DIR)/%,$(TEST_SRCS))
 
 .PHONY: all test clean
 all: $(BUILD_DIR)/tpe_model
@@ -14,14 +16,14 @@ all: $(BUILD_DIR)/tpe_model
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
-$(BUILD_DIR)/tpe_model: $(SRC) include/Scratchpad.hpp | $(BUILD_DIR)
+$(BUILD_DIR)/tpe_model: $(SRC) $(HEADERS) | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) $(SRC) -o $@
 
-$(BUILD_DIR)/test_scratchpad: $(TEST_SRC) include/Scratchpad.hpp | $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) $(TEST_SRC) -o $@
+$(BUILD_DIR)/%: tests/%.cpp $(HEADERS) | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) $< -o $@
 
-test: $(BUILD_DIR)/test_scratchpad
-	./$(BUILD_DIR)/test_scratchpad
+test: $(TEST_BINS)
+	@for t in $(TEST_BINS); do echo "-- $$t --"; ./$$t || exit 1; done
 
 clean:
 	rm -rf $(BUILD_DIR)

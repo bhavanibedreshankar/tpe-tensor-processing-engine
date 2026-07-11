@@ -10,7 +10,7 @@ where practical to keep this tree pure RTL).
 | `include/` | `tpe_pkg.sv` (shared params/typedefs), `tpe_regs_pkg.sv` (generated register map) | M0 | done |
 | `common/` | `sync_fifo`, `round_robin_arb`, `dp_ram` -- reusable primitives | M0 | done |
 | `sram/` | Local SRAM scratchpad | M1 | done |
-| `matrix_engine/` | MAC array (`pe.sv`), accumulator, GEMM control | M2 | pending |
+| `matrix_engine/` | MAC array (`pe.sv`), accumulator, GEMM control | M2 | done (3 intentional bugs, see bug catalog) |
 | `dma/` | Descriptor-based DDR<->SRAM DMA engine | M3 | pending |
 | `command_processor/` | AXI4-Lite MMIO, command decode/staging | M4 | pending |
 | `scheduler/` | DMA/compute arbitration, dependency tracking | M4 | pending |
