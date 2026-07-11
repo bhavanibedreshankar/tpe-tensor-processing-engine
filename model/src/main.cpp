@@ -14,6 +14,7 @@
 #include <iostream>
 #include <vector>
 
+#include "DmaEngine.hpp"
 #include "MacArray.hpp"
 #include "Scratchpad.hpp"
 
@@ -140,12 +141,64 @@ int cmd_matmul(int argc, char** argv) {
   return 0;
 }
 
+// Stimulus file: {mem_row,sram_row,n_rows,dir: u32 LE each} then the DDR
+// image (ddr_depth*row_bytes bytes) then the SRAM image
+// (sram_depth*row_bytes bytes). Result file: updated DDR image followed by
+// updated SRAM image, same sizes. See
+// verif/cocotb_tb/dma/scoreboard.py for the writer/reader.
+#pragma pack(push, 1)
+struct DmaHeader {
+  std::uint32_t mem_row;
+  std::uint32_t sram_row;
+  std::uint32_t n_rows;
+  std::uint32_t dir;
+};
+#pragma pack(pop)
+
+int cmd_dma_apply(int argc, char** argv) {
+  if (argc < 6) {
+    std::cerr << "usage: tpe_model dma-apply <stim.bin> <out.bin> <ddr_depth> <sram_depth> [row_bytes]\n";
+    return 2;
+  }
+  const std::size_t ddr_depth = static_cast<std::size_t>(std::stoul(argv[4]));
+  const std::size_t sram_depth = static_cast<std::size_t>(std::stoul(argv[5]));
+  const std::size_t row_bytes = argc > 6 ? static_cast<std::size_t>(std::stoul(argv[6])) : 16;
+
+  const auto raw = read_file(argv[2]);
+  const std::size_t ddr_bytes = ddr_depth * row_bytes;
+  const std::size_t sram_bytes = sram_depth * row_bytes;
+  const std::size_t expected = sizeof(DmaHeader) + ddr_bytes + sram_bytes;
+  if (raw.size() != expected) {
+    std::cerr << "error: stimulus file size " << raw.size() << " != expected " << expected << "\n";
+    return 1;
+  }
+
+  DmaHeader hdr;
+  std::memcpy(&hdr, raw.data(), sizeof(hdr));
+
+  tpe::model::Scratchpad ddr(ddr_depth, row_bytes);
+  tpe::model::Scratchpad sram(sram_depth, row_bytes);
+  ddr.load_image(raw.data() + sizeof(hdr), ddr_bytes);
+  sram.load_image(raw.data() + sizeof(hdr) + ddr_bytes, sram_bytes);
+
+  tpe::model::DmaEngine::copy(ddr, sram, hdr.mem_row, hdr.sram_row, hdr.n_rows, hdr.dir != 0);
+
+  std::vector<std::uint8_t> out;
+  out.insert(out.end(), ddr.raw_image().begin(), ddr.raw_image().end());
+  out.insert(out.end(), sram.raw_image().begin(), sram.raw_image().end());
+  write_file(argv[3], out);
+
+  std::cerr << "tpe_model: dma-apply " << hdr.n_rows << " rows " << (hdr.dir ? "SRAM->DDR" : "DDR->SRAM")
+            << " -> " << argv[3] << "\n";
+  return 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
   if (argc < 2) {
     std::cerr << "usage: tpe_model <subcommand> [args...]\n"
-                 "subcommands: sram-apply, matmul\n";
+                 "subcommands: sram-apply, matmul, dma-apply\n";
     return 2;
   }
   const std::string subcmd = argv[1];
@@ -155,6 +208,9 @@ int main(int argc, char** argv) {
     }
     if (subcmd == "matmul") {
       return cmd_matmul(argc, argv);
+    }
+    if (subcmd == "dma-apply") {
+      return cmd_dma_apply(argc, argv);
     }
     std::cerr << "error: unknown subcommand '" << subcmd << "'\n";
     return 2;

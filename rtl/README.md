@@ -11,7 +11,7 @@ where practical to keep this tree pure RTL).
 | `common/` | `sync_fifo`, `round_robin_arb`, `dp_ram` -- reusable primitives | M0 | done |
 | `sram/` | Local SRAM scratchpad | M1 | done |
 | `matrix_engine/` | MAC array (`pe.sv`), accumulator, GEMM control | M2 | done (3 intentional bugs, see bug catalog) |
-| `dma/` | Descriptor-based DDR<->SRAM DMA engine | M3 | pending |
+| `dma/` | Descriptor-based DDR<->SRAM DMA engine | M3 | done (1 intentional bug, see bug catalog) |
 | `command_processor/` | AXI4-Lite MMIO, command decode/staging | M4 | pending |
 | `scheduler/` | DMA/compute arbitration, dependency tracking | M4 | pending |
 | `pmu/` | Performance counters | M5 | pending |

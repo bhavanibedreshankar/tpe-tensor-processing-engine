@@ -6,8 +6,8 @@ CXXFLAGS := -std=c++17 -Wall -Wextra -Werror -Iinclude -O2
 BUILD_DIR := build
 
 SRC := src/main.cpp
-HEADERS := include/Scratchpad.hpp include/MacArray.hpp
-TEST_SRCS := tests/test_scratchpad.cpp tests/test_matmul.cpp
+HEADERS := include/Scratchpad.hpp include/MacArray.hpp include/DmaEngine.hpp
+TEST_SRCS := tests/test_scratchpad.cpp tests/test_matmul.cpp tests/test_dma.cpp
 TEST_BINS := $(patsubst tests/%.cpp,$(BUILD_DIR)/%,$(TEST_SRCS))
 
 .PHONY: all test clean

@@ -1,7 +1,7 @@
 # model/ -- C++ golden reference model
 
-**Status: `Scratchpad` (M1) and `matmul`/`MacArray` (M2) done.** Next:
-`DmaEngine` (M3), `CommandProcessor` (M4).
+**Status: `Scratchpad` (M1), `matmul`/`MacArray` (M2), `DmaEngine` (M3)
+done.** Next: `CommandProcessor` (M4).
 
 A C++17, object-oriented reference model mirroring the RTL's block
 structure. Built as a small CLI (`tpe_model`) that consumes a binary
@@ -20,11 +20,13 @@ toolchain (`model/tests/`, plain C++ unit tests, no simulator required),
 and avoids pybind11 build fragility across environments.
 
 ```
-include/Scratchpad.hpp   golden model of rtl/sram/tpe_sram.sv
+include/Scratchpad.hpp   golden model of rtl/sram/tpe_sram.sv (+ load_image bulk loader)
 include/MacArray.hpp     golden model of rtl/matrix_engine/*.sv (matmul + saturating_add)
-src/main.cpp             tpe_model CLI (sram-apply, matmul subcommands)
+include/DmaEngine.hpp    golden model of rtl/dma/tpe_dma.sv (row-copy between two Scratchpads)
+src/main.cpp             tpe_model CLI (sram-apply, matmul, dma-apply subcommands)
 tests/test_scratchpad.cpp  dependency-free unit tests (no Catch2/GoogleTest)
 tests/test_matmul.cpp      ditto, incl. saturation-on-overflow cases
+tests/test_dma.cpp         ditto, incl. multi-row copies in both directions
 Makefile                  `make` builds tpe_model, `make test` runs unit tests
 ```
 

@@ -3,6 +3,7 @@
 // modeling) -- the pyuvm scoreboard is responsible for feeding writes in
 // the same order the RTL executed them and for the pipeline-latency
 // bookkeeping; this class only owns "what the final memory contents are."
+#include <algorithm>
 #include <cstdint>
 #include <stdexcept>
 #include <vector>
@@ -38,6 +39,15 @@ class Scratchpad {
   }
 
   const std::vector<std::uint8_t>& raw_image() const { return mem_; }
+
+  // Bulk-load a full image (e.g. from a stimulus file), bypassing per-row
+  // strobing. `data.size()` must exactly match `depth() * row_bytes()`.
+  void load_image(const std::uint8_t* data, std::size_t size) {
+    if (size != mem_.size()) {
+      throw std::invalid_argument("Scratchpad::load_image: size mismatch");
+    }
+    std::copy(data, data + size, mem_.begin());
+  }
 
  private:
   void check_addr(std::uint32_t addr) const {

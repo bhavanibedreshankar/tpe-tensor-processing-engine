@@ -64,7 +64,17 @@ weight_load_row is one-hot0, start-time dims are in range, and
 `mac_array`'s result is never X when valid.
 
 ### 3.3 DMA Engine (M3)
-_TBD when M3 lands._
+
+RTL-side (`verif/coverage/dma_cov.sv`, bound to `tpe_dma`): `cp_state`/
+`cp_arc` -- FSM state and transition coverage over the 10-state control FSM
+including the multi-burst continuation arcs (`RD_DATA -> DECODE`,
+`WR_RESP -> DECODE`) that the intentional bug (#4 in the bug catalog) lives
+in; `cp_dir`/`cp_len_rows` -- direction and transfer-size bins (one row,
+sub-burst, exact-burst, multi-burst) sampled on `start`; `cp_burst_full` --
+did this run ever issue a full `MAX_BURST_BEATS`-beat burst. SVA
+(`verif/sva/dma_sva.sv`): standard AXI4 VALID-stability on both the
+`tpe_dma` master side and the `axi4_ddr_model` slave side, `done`/`error`
+mutual exclusion, and no-X on `rdata` when valid.
 
 ### 3.4 Command Processor / Scheduler (M4)
 _TBD when M4 lands._

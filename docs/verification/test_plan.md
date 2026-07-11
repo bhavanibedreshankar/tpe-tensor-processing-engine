@@ -118,7 +118,7 @@ land; each is removed once its milestone's section above is filled in.
 
 - [x] Local SRAM detailed test list (M1) -- see `verif/cocotb_tb/sram/README.md`
 - [x] Matrix Compute Engine detailed test list (M2) -- see `verif/cocotb_tb/matrix_engine/README.md`
-- [ ] DMA Engine detailed test list (M3)
+- [x] DMA Engine detailed test list (M3) -- see `verif/cocotb_tb/dma/README.md`
 - [ ] Command Processor / Scheduler detailed test list (M4)
 - [ ] PMU / Debug detailed test list (M5)
 - [ ] Coverage closure report template (M6)

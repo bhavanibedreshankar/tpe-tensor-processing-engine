@@ -20,7 +20,7 @@ Building incrementally, foundation first. Current state:
 | M0 | Foundation: repo skeleton, toolchain smoke test, shared RTL package + common lib, register map + generators, docs, build system | **done** |
 | M1 | Local SRAM scratchpad + reusable pyuvm verification pattern | **done** |
 | M2 | Matrix Compute Engine (systolic MAC array, GEMM) | **done** (3 intentional bugs present, see bug catalog) |
-| M3 | DMA Engine (AXI4, descriptor-based) | not started |
+| M3 | DMA Engine (AXI4, descriptor-based) | **done** (1 intentional bug present, see bug catalog) |
 | M4 | Command Processor + Scheduler + top-level integration | not started |
 | M5 | Performance Monitor Unit + Debug infrastructure | not started |
 | M6 | Regression infrastructure (test generator, job scheduler, coverage merge, profiler, lint, CI) | not started |
