@@ -2,14 +2,18 @@
 
 | Tool | Purpose | Status |
 |---|---|---|
-| `regmap_gen.py` | Generates `rtl/include/tpe_regs_pkg.sv`, `model/include/tpe_regs.h`, `docs/register_map/generated/register_map.md` from `docs/register_map/tpe_regs.yaml` | done |
+| `regmap_gen.py` | Generates `rtl/include/tpe_regs_pkg.sv`, `model/include/tpe_regs.h`, `verif/cocotb_tb/env/tpe_regs.py`, `docs/register_map/generated/register_map.md` from `docs/register_map/tpe_regs.yaml` | done |
 | `common/logger.py` | Shared structured/colorized logging used by every tool below | done |
-| `gen_tests.py` | Expands testlist templates + seeds into the 100 daily / 100 random concrete test invocations | M6 |
-| `regression.py` | Parallel job-scheduler/regression runner (the local farm/Jenkins-replacement); JUnit XML + summary reports | M6 |
-| `cov_merge.py` | Merges per-test Verilator + cocotb-coverage results into one report | M6 |
-| `profiler.py` | Per-test wall-clock/cycle-throughput profiling, outlier flagging | M6 |
-| `lint.py` | `verilator --lint-only` wrapper across the whole `rtl/` tree + waiver list | M6 |
-| `waves.py` | Convenience GTKWave launcher for a given test's dump | M6 |
+| `common/seed.py` | `TPE_SEED` env-var override for every block's `*_random_test`, letting `regression.py` sweep seeds | done (M6) |
+| `gen_tests.py` | Expands `verif/testlists/standalone.yaml` + `smoke.yaml` into `daily.yaml` (100 tests) / `random.yaml` (100 tests) | done (M6) |
+| `regression.py` | Parallel job-scheduler/regression runner (the local farm/Jenkins-replacement); JUnit XML + JSON + summary reports | done (M6) |
+| `cov_merge.py` | Merges per-test Verilator coverage.dat files into one report (`verilator_coverage`) | done (M6) |
+| `profiler.py` | Per-test wall-clock profiling from a regression's results.json, outlier flagging | done (M6) |
+| `lint.py` | `verilator --lint-only` wrapper across every `rtl/` block + per-block waivers (source of truth for `make lint`) | done (M6) |
+| `waves.py` | Convenience GTKWave launcher for a given block's last waveform dump | done (M6) |
+
+See [`docs/flows/regression_flow.md`](../docs/flows/regression_flow.md) for
+how these fit together (testlists -> regression -> coverage/profiling).
 
 Run any tool through the project venv (`make venv` first):
 

@@ -25,6 +25,18 @@ module smoke_counter #(
       overflow_q <= 1'b0;
     end else if (en) begin
       {overflow_q, count_q} <= {1'b0, count_q} + 1'b1;
+    end else begin
+      // Idle (en=0, load=0): count_q holds by omission above, but
+      // overflow_q must be explicitly cleared here -- without this branch
+      // it would hold too, letting a wrap's overflow pulse stay asserted
+      // across however many idle cycles follow it, violating
+      // a_overflow_pulses_once below. Found via tools/regression.py: this
+      // toolchain-smoke-only DUT's own driver randomizes en/load every
+      // cycle without a fixed seed, so an idle cycle immediately after a
+      // wrap wasn't reliably exercised until repeated regression runs hit
+      // it. Not part of the TPE architecture proper, so not in
+      // docs/verification/bug_list.md's intentional-bug catalog.
+      overflow_q <= 1'b0;
     end
   end
 

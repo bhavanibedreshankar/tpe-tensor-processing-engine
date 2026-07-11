@@ -1,0 +1,40 @@
+# Master test catalog -- every cocotb test in the repo, hand-maintained
+# (unlike daily.yaml/random.yaml, which tools/gen_tests.py derives from
+# this file plus the "random" kind entries below). Run any single entry
+# directly while developing/debugging a block:
+#   make -C verif/cocotb_tb/<dir> TESTCASE=<test>
+# `kind` values: sanity (fast golden path), directed (a specific scenario),
+# random (constrained-random, seed-sweepable -- see tools/gen_tests.py),
+# error (an error/boundary-injection path), integration (spans blocks).
+# `expect_fail: bug<N>` marks a test that fails by design against a
+# catalogued bug (see docs/verification/bug_list.md) -- absent means the
+# test is expected to pass.
+suite: standalone
+tests:
+  - {dir: sram, test: sram_sanity_test, kind: sanity}
+  - {dir: sram, test: sram_random_test, kind: random, default_seed: 1}
+
+  - {dir: matrix_engine, test: matmul_sanity_test, kind: sanity}
+  - {dir: matrix_engine, test: matmul_random_test, kind: random, default_seed: 7, expect_fail: "bug1,bug2"}
+  - {dir: matrix_engine, test: matmul_overflow_test, kind: directed, expect_fail: bug3}
+
+  - {dir: dma, test: dma_sanity_test, kind: sanity}
+  - {dir: dma, test: dma_random_test, kind: random, default_seed: 11}
+  - {dir: dma, test: dma_multiburst_write_test, kind: directed, expect_fail: bug4}
+  - {dir: dma, test: dma_error_test, kind: error}
+
+  - {dir: top, test: matmul_flow_test, kind: sanity}
+  - {dir: top, test: irq_test, kind: directed}
+  - {dir: top, test: error_handling_test, kind: error}
+  - {dir: top, test: matmul_full_width_test, kind: directed, expect_fail: bug5}
+  - {dir: top, test: irq_independent_clear_test, kind: directed, expect_fail: bug6}
+  - {dir: top, test: pmu_debug_integration_test, kind: integration}
+
+  - {dir: pmu, test: counter_basics_test, kind: sanity}
+  - {dir: pmu, test: latency_test, kind: directed, expect_fail: bug7}
+
+  - {dir: debug, test: trace_pop_test, kind: sanity}
+  - {dir: debug, test: error_latch_test, kind: directed}
+  - {dir: debug, test: trace_disabled_test, kind: directed}
+
+  - {dir: smoke, test: smoke_toolchain_test, kind: sanity}

@@ -87,7 +87,8 @@ class DmaSanityTest(DmaTestBase):
 
 class DmaRandomTest(DmaTestBase):
     async def run_test_body(self):
-        rng = random.Random(11)
+        from tools.common.seed import get_seed
+        rng = random.Random(get_seed(11))
         for i in range(10):
             dir_sram_to_ddr = rng.choice([False, True])
             n_rows = rng.randint(1, 40)  # exercises multi-burst transfers (> MAX_BURST_BEATS=16)

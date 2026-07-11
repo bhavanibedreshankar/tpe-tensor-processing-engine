@@ -1,0 +1,104 @@
+name: TPE Regression
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Nightly daily regression, 06:00 UTC.
+    - cron: "0 6 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  lint-and-smoke:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Verilator + GTKWave
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y verilator gtkwave
+
+      - name: make venv
+        run: make venv
+
+      - name: make lint
+        run: make lint
+
+      - name: make smoke
+        run: make smoke
+
+      - name: Upload smoke regression results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-regression
+          path: sim/logs/smoke/
+
+  daily-regression:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Verilator + GTKWave
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y verilator gtkwave
+
+      - name: make venv
+        run: make venv
+
+      - name: make daily
+        run: make daily
+
+      - name: Merge coverage
+        run: make cov-merge SUITE=daily
+
+      - name: Profile
+        run: make profile SUITE=daily
+
+      - name: Upload daily regression + coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-regression
+          path: sim/logs/daily/
+
+  random-regression:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Verilator + GTKWave
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y verilator gtkwave
+
+      - name: make venv
+        run: make venv
+
+      - name: make random
+        run: make random
+
+      - name: Upload random regression results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: random-regression
+          path: sim/logs/random/

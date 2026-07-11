@@ -37,8 +37,10 @@ class SramSanityTest(SramTestBase):
 class SramRandomTest(SramTestBase):
     # Stays within [0, 4090) -- see SramDirectedSeq's reservation note.
     async def run_test_body(self):
-        seq_a = SramRandomSeq("seq_a", addr_lo=0, addr_hi=2000, n_ops=150, seed=1)
-        seq_b = SramRandomSeq("seq_b", addr_lo=2000, addr_hi=4000, n_ops=150, seed=2)
+        from tools.common.seed import get_seed
+        base_seed = get_seed(1)
+        seq_a = SramRandomSeq("seq_a", addr_lo=0, addr_hi=2000, n_ops=150, seed=base_seed)
+        seq_b = SramRandomSeq("seq_b", addr_lo=2000, addr_hi=4000, n_ops=150, seed=base_seed + 1000)
         task_a = cocotb.start_soon(seq_a.start(self.env.agent_a.sequencer))
         task_b = cocotb.start_soon(seq_b.start(self.env.agent_b.sequencer))
         await task_a

@@ -1,0 +1,30 @@
+# Cross-block golden-path + directed error/boundary paths, sized for
+# pre-commit. Sanity tier plus every non-random directed/error/integration
+# test in verif/testlists/standalone.yaml (random-tier tests are excluded
+# here -- they belong to daily/random, which sweep them across many seeds).
+suite: smoke
+tests:
+  - {dir: smoke, test: smoke_toolchain_test}
+
+  - {dir: sram, test: sram_sanity_test}
+
+  - {dir: matrix_engine, test: matmul_sanity_test}
+  - {dir: matrix_engine, test: matmul_overflow_test}
+
+  - {dir: dma, test: dma_sanity_test}
+  - {dir: dma, test: dma_multiburst_write_test}
+  - {dir: dma, test: dma_error_test}
+
+  - {dir: top, test: matmul_flow_test}
+  - {dir: top, test: irq_test}
+  - {dir: top, test: error_handling_test}
+  - {dir: top, test: matmul_full_width_test}
+  - {dir: top, test: irq_independent_clear_test}
+  - {dir: top, test: pmu_debug_integration_test}
+
+  - {dir: pmu, test: counter_basics_test}
+  - {dir: pmu, test: latency_test}
+
+  - {dir: debug, test: trace_pop_test}
+  - {dir: debug, test: error_latch_test}
+  - {dir: debug, test: trace_disabled_test}

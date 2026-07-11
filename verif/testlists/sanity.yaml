@@ -1,0 +1,12 @@
+# Fast golden-path check per block, run after every RTL edit. Subset of
+# verif/testlists/standalone.yaml's `kind: sanity` entries, plus the one
+# block (top) whose most representative golden-path test isn't literally
+# named "*_sanity_test".
+suite: sanity
+tests:
+  - {dir: sram, test: sram_sanity_test}
+  - {dir: matrix_engine, test: matmul_sanity_test}
+  - {dir: dma, test: dma_sanity_test}
+  - {dir: top, test: matmul_flow_test}
+  - {dir: pmu, test: counter_basics_test}
+  - {dir: debug, test: trace_pop_test}

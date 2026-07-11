@@ -1,0 +1,57 @@
+// Reference Jenkins pipeline for users who already run their own Jenkins
+// controller. Calls the exact same `make` targets as
+// ci/github/workflows/regression.yml -- no logic lives here beyond
+// deciding which targets run for which trigger. NOT exercised in this
+// development environment (no Jenkins instance available here); treat
+// this as a documented reference implementation, not something covered
+// by this repo's own regressions. Assumes Verilator, Icarus Verilog, and
+// GTKWave are already installed on the agent (see README.md#toolchain) --
+// unlike the GitHub Actions workflow, this file does not install them.
+pipeline {
+    agent any
+
+    triggers {
+        // Nightly daily regression, 06:00 controller-local time.
+        cron(env.BRANCH_NAME == 'main' ? 'H 6 * * *' : '')
+    }
+
+    parameters {
+        booleanParam(name: 'RUN_RANDOM', defaultValue: false,
+                     description: 'Run the 100-test random regression tier instead of lint+smoke')
+    }
+
+    stages {
+        stage('venv') {
+            steps { sh 'make venv' }
+        }
+
+        stage('lint + smoke') {
+            when { expression { !params.RUN_RANDOM && !currentBuild.buildCauses('hudson.triggers.TimerTrigger$TimerTriggerCause') } }
+            steps {
+                sh 'make lint'
+                sh 'make smoke'
+            }
+        }
+
+        stage('daily (nightly)') {
+            when { expression { currentBuild.buildCauses('hudson.triggers.TimerTrigger$TimerTriggerCause') } }
+            steps {
+                sh 'make daily'
+                sh 'make cov-merge SUITE=daily'
+                sh 'make profile SUITE=daily'
+            }
+        }
+
+        stage('random (manual)') {
+            when { expression { params.RUN_RANDOM } }
+            steps { sh 'make random' }
+        }
+    }
+
+    post {
+        always {
+            archiveArtifacts artifacts: 'sim/logs/**', allowEmptyArchive: true
+            junit testResults: 'sim/logs/**/regression.xml', allowEmptyResults: true
+        }
+    }
+}

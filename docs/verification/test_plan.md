@@ -138,4 +138,4 @@ land; each is removed once its milestone's section above is filled in.
 - [x] DMA Engine detailed test list (M3) -- see `verif/cocotb_tb/dma/README.md`
 - [x] Command Processor / Scheduler detailed test list (M4) -- see `verif/cocotb_tb/top/README.md`
 - [x] PMU / Debug detailed test list (M5) -- see `verif/cocotb_tb/pmu/README.md` and `verif/cocotb_tb/debug/README.md`
-- [ ] Coverage closure report template (M6)
+- [x] Coverage closure report template (M6) -- see `tools/cov_merge.py` and `docs/flows/regression_flow.md` section 4

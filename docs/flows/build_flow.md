@@ -42,10 +42,10 @@ diffs are reviewable).
 make lint
 ```
 
-Runs `verilator --lint-only` over the current RTL set (grows as blocks
-land; from M6 onward this is wrapped by `tools/lint.py`, which adds a
-waiver list for known-acceptable warnings and aggregates results across the
-whole `rtl/` tree in one pass instead of the current per-file invocations).
+Runs `verilator --lint-only` over every synthesizable block in `rtl/`,
+driven by `tools/lint.py` (the single source of truth for each block's
+source list/top-module/warning-waivers -- see that file's docstring for
+why some blocks need width-cast waivers others don't).
 
 ## 4. Per-block simulation build
 

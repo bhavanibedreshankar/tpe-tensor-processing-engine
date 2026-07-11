@@ -92,7 +92,8 @@ class MatmulSanityTest(MatrixEngineTestBase):
 
 class MatmulRandomTest(MatrixEngineTestBase):
     async def run_test_body(self):
-        rng = random.Random(7)
+        from tools.common.seed import get_seed
+        rng = random.Random(get_seed(7))
         for i in range(10):
             m = rng.randint(1, 8)
             k = rng.randint(1, ROWS)

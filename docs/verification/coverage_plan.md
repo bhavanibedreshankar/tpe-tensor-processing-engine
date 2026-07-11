@@ -113,12 +113,20 @@ VALID-stability plus `cycle_count_q` monotonicity (never decreases outside
 ## 4. Coverage closure process
 
 1. `tools/regression.py` runs a suite; each test's simulator invocation
-   writes its own `coverage.dat` (Verilator) and `.cocotb_coverage` DB
-   (cocotb-coverage) under `sim/logs/<suite>/<test>/`.
-2. `tools/cov_merge.py --suite <name>` merges all of those into
-   `sim/logs/<suite>/merged_coverage.dat` (Verilator side) and a summed
-   Python coverage-DB (functional side), then renders a single HTML/text
-   summary.
+   writes `coverage.dat` (Verilator -- line/toggle/branch plus every
+   RTL-side SV covergroup, since `--coverage-user` writes into the same
+   file) and, for the one block that samples TB-side cocotb-coverage
+   (`verif/cocotb_tb/sram/coverage.py`), `sram_coverage.xml`.
+   `regression.py` copies both out immediately (to
+   `sim/logs/<suite>/coverage/<tag>.dat` / `<tag>.cocotb_coverage.xml`)
+   before the next test in that directory overwrites them.
+2. `make cov-merge SUITE=<name>` (`tools/cov_merge.py`) merges all
+   `.dat` files into `sim/logs/<suite>/merged_coverage.dat` via
+   `verilator_coverage -write`, then renders `coverage_summary.txt` via
+   `verilator_coverage --report summary,hier` (pass `--annotate` for a
+   per-source annotated report); separately sums matching bins across all
+   `.cocotb_coverage.xml` files (same fixed covergroup shape every sram
+   test shares) into `sim/logs/<suite>/cocotb_coverage_merged.xml`.
 3. Gaps are triaged: either add a directed test (`verif/testlists/`), add a
    random-generator constraint (`tools/gen_tests.py`), or -- rarely -- waive
    a genuinely unreachable bin with a documented reason in the block's

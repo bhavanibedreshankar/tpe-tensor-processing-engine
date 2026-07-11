@@ -25,18 +25,16 @@ def _addr_region(txn):
 
 @CoverPoint("sram.port_a.op_type", xf=_op_type, bins=["read", "write", "idle"])
 @CoverPoint("sram.port_a.addr_region", xf=_addr_region, bins=["low", "mid", "high"])
+@CoverCross("sram.port_a.op_x_region", items=["sram.port_a.op_type", "sram.port_a.addr_region"])
 def sample_port_a(txn):
     pass
 
 
 @CoverPoint("sram.port_b.op_type", xf=_op_type, bins=["read", "write", "idle"])
 @CoverPoint("sram.port_b.addr_region", xf=_addr_region, bins=["low", "mid", "high"])
+@CoverCross("sram.port_b.op_x_region", items=["sram.port_b.op_type", "sram.port_b.addr_region"])
 def sample_port_b(txn):
     pass
-
-
-CoverCross("sram.port_a.op_x_region", items=["sram.port_a.op_type", "sram.port_a.addr_region"])
-CoverCross("sram.port_b.op_x_region", items=["sram.port_b.op_type", "sram.port_b.addr_region"])
 
 
 def report(logger):

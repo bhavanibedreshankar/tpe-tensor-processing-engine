@@ -23,12 +23,11 @@ Building incrementally, foundation first. Current state:
 | M3 | DMA Engine (AXI4, descriptor-based) | **done** (1 intentional bug present, see bug catalog) |
 | M4 | Command Processor + Scheduler + top-level integration | **done** (2 intentional bugs present, see bug catalog) |
 | M5 | Performance Monitor Unit + Debug infrastructure | **done** (1 intentional bug present, see bug catalog) |
-| M6 | Regression infrastructure (test generator, job scheduler, coverage merge, profiler, lint, CI) | not started |
+| M6 | Regression infrastructure (test generator, job scheduler, coverage merge, profiler, lint, CI) | **done** |
 | M7 | Bug catalog + full regression proof | not started |
 
-There is no synthesizable "chip" yet beyond the foundation package and
-common RTL library -- the real blocks land in M1-M5. This README is updated
-as each milestone completes.
+RTL is complete for V1 (M1-M5); M6 built the regression/CI tooling around
+it. This README is updated as each milestone completes.
 
 ## Toolchain
 
@@ -58,11 +57,18 @@ environment; `verilator --lint-only` is used instead (see `make lint`).
 ```
 make venv              # set up the Python virtualenv
 make regmap             # generate SV/C++/Markdown from the register map YAML
-make lint                # lint the current RTL
+make lint                # lint all RTL (tools/lint.py)
 make toolchain-smoke     # prove cocotb+pyuvm+Verilator+coverage+waveform all work
+make sanity              # ~6 tests, one golden-path test per block
+make smoke               # ~18 tests, cross-block + directed error/boundary paths
+make daily               # 100 tests: directed + seeded-random
+make random              # 100 seeded-random tests
 ```
 
-`make help` lists every available target.
+`make help` lists every available target. See
+[Regression flow](docs/flows/regression_flow.md) for what a "clean" run
+looks like (some `FAIL`s are expected -- they're the catalogued bugs, see
+below) and how to reproduce/profile/merge-coverage for any run.
 
 ## Repository layout
 
@@ -72,10 +78,10 @@ docs/            architecture spec, register map (YAML source of truth + generat
 rtl/             synthesizable SystemVerilog, one directory per block
 model/           C++17 golden reference model (OOP, mirrors the RTL block structure)
 verif/           cocotb+pyuvm testbenches, SVA (bind files), coverage models, testlists
-tools/           Python infra: register-map generator, (soon) test generator,
-                 regression/job-scheduler, coverage merger, profiler, linter, logger
+tools/           Python infra: register-map generator, test generator, regression/
+                 job-scheduler, coverage merger, profiler, linter, waves launcher, logger
 sim/             simulation build/run outputs (gitignored except .gitkeep)
-ci/              GitHub Actions workflow + reference Jenkinsfile (M6)
+ci/              GitHub Actions workflow + reference Jenkinsfile
 Makefile         top-level entry point; wraps everything above
 ```
 
@@ -87,8 +93,8 @@ Makefile         top-level entry point; wraps everything above
 - [Coverage plan](docs/verification/coverage_plan.md)
 - [Bug catalog](docs/verification/bug_list.md) -- intentionally injected RTL bugs and what catches them
 - [Build flow](docs/flows/build_flow.md)
-- [Regression flow](docs/flows/regression_flow.md) (M6)
-- [CI/CD flow](docs/flows/ci_flow.md) (M6)
+- [Regression flow](docs/flows/regression_flow.md)
+- [CI/CD flow](docs/flows/ci_flow.md)
 
 ## Design note: intentional bugs
 

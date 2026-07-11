@@ -59,3 +59,21 @@ SRAM-specific, so every later block inherits the fix):
    unambiguous) and `rdata` at the following `RisingEdge`, so both fields
    always describe the same operation. See that file's docstring for the
    full derivation.
+
+## `coverage.py`'s CoverCross bug (found via M6's `tools/cov_merge.py`)
+
+`op_x_region`'s cross-coverage bins (op_type x addr_region) read 0% on
+every run from M1 through M5, invisible until M6's coverage-merge tooling
+actually rendered a report -- neither test's `report_phase` assertion
+depends on cross-coverage percentages, so nothing failed. Root cause:
+`CoverCross(...)` was a bare statement after both `@CoverPoint`-decorated
+sampling functions, which registers the cross (so its bins count toward
+the *size* used in coverage-percentage math, silently dragging every
+reported percentage down) but never actually wraps `sample_port_a`/
+`sample_port_b`, so its bins never increment. `CoverCross` must itself be
+a decorator stacked on the sampling function -- and, since its `__init__`
+looks up its constituent `CoverPoint`s in `coverage_db` immediately, it
+must be the *innermost* decorator (closest to `def`), applied only after
+those `CoverPoint`s already exist, matching cocotb-coverage's own
+documented example. Fixed by moving both `CoverCross` calls to decorate
+`sample_port_a`/`sample_port_b` directly, below their `CoverPoint`s.

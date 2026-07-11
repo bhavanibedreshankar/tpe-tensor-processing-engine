@@ -1,19 +1,20 @@
 # Tensor Processing Engine (TPE) -- top-level build/verification entry point.
 #
-# This Makefile grows alongside the milestones in the plan (see README.md):
-# targets like `sanity`/`smoke`/`daily`/`random` are added once
-# tools/regression.py and the per-block testbenches exist (M1-M6). For now
-# it covers the foundation: environment setup, register-map generation,
-# RTL lint, and the toolchain smoke test.
+# Foundation (venv/regmap/lint/model), per-block `sim-<block>` targets, and
+# the M6 regression tiers (`sanity`/`smoke`/`daily`/`random`, driven by
+# tools/regression.py -- the local job-scheduler/farm replacement) plus
+# `gen-tests`/`cov-merge`/`profile`. See docs/flows/regression_flow.md.
 
 SHELL := /bin/bash
 REPO_ROOT := $(abspath .)
 VENV := $(REPO_ROOT)/.venv
 PYTHON := $(VENV)/bin/python3
 PIP := $(VENV)/bin/pip
+JOBS ?= $(shell sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)
 
 RTL_PKG := rtl/include/tpe_pkg.sv rtl/include/tpe_regs_pkg.sv
 RTL_COMMON := rtl/common/sync_fifo.sv rtl/common/round_robin_arb.sv rtl/common/dp_ram.sv
+REGRESSION_BLOCKS := sram matrix_engine dma top pmu debug smoke
 
 .DEFAULT_GOAL := help
 
@@ -34,39 +35,8 @@ regmap: venv ## Regenerate SV/C++/Markdown from docs/register_map/tpe_regs.yaml
 	$(PYTHON) tools/regmap_gen.py
 
 .PHONY: lint
-lint: ## Lint all current RTL with verilator --lint-only
-	@echo "== linting foundation RTL =="
-	verilator --lint-only -Wall -Wno-DECLFILENAME -Wno-UNUSEDPARAM \
-		$(RTL_PKG) $(RTL_COMMON) \
-		--top-module sync_fifo 2>&1 | tail -n +1
-	verilator --lint-only -Wall -Wno-DECLFILENAME -Wno-UNUSEDPARAM \
-		$(RTL_PKG) rtl/common/round_robin_arb.sv --top-module round_robin_arb
-	verilator --lint-only -Wall -Wno-DECLFILENAME -Wno-UNUSEDPARAM \
-		$(RTL_PKG) rtl/common/dp_ram.sv --top-module dp_ram
-	verilator --lint-only -Wall -Wno-DECLFILENAME -Wno-UNUSEDPARAM \
-		$(RTL_PKG) rtl/common/dp_ram.sv rtl/sram/tpe_sram.sv --top-module tpe_sram
-	verilator --lint-only -Wall -Wno-DECLFILENAME -Wno-UNUSEDPARAM -Wno-UNUSEDSIGNAL -Wno-PINCONNECTEMPTY -Wno-UNSIGNED \
-		$(RTL_PKG) rtl/common/dp_ram.sv rtl/matrix_engine/pe.sv rtl/matrix_engine/mac_array.sv \
-		rtl/matrix_engine/matrix_engine_ctrl.sv rtl/matrix_engine/matrix_engine.sv --top-module matrix_engine
-	verilator --lint-only -Wall -Wno-DECLFILENAME -Wno-UNUSEDPARAM -Wno-UNUSEDSIGNAL \
-		$(RTL_PKG) rtl/dma/tpe_dma.sv --top-module tpe_dma
-	verilator --lint-only -Wall -Wno-DECLFILENAME -Wno-UNUSEDSIGNAL \
-		rtl/common/dp_ram.sv verif/models/axi4_ddr_model.sv --top-module axi4_ddr_model
-	verilator --lint-only -Wall -Wno-DECLFILENAME -Wno-UNUSEDPARAM -Wno-UNUSEDSIGNAL -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC \
-		$(RTL_PKG) rtl/common/sync_fifo.sv rtl/command_processor/tpe_cmd_proc.sv --top-module tpe_cmd_proc
-	verilator --lint-only -Wall -Wno-DECLFILENAME -Wno-UNUSEDPARAM -Wno-UNUSEDSIGNAL -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC \
-		$(RTL_PKG) rtl/scheduler/tpe_scheduler.sv --top-module tpe_scheduler
-	verilator --lint-only -Wall -Wno-DECLFILENAME -Wno-UNUSEDPARAM -Wno-UNUSEDSIGNAL -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC \
-		$(RTL_PKG) rtl/pmu/tpe_pmu.sv --top-module tpe_pmu
-	verilator --lint-only -Wall -Wno-DECLFILENAME -Wno-UNUSEDPARAM -Wno-UNUSEDSIGNAL -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC \
-		$(RTL_PKG) rtl/common/sync_fifo.sv rtl/debug/tpe_debug.sv --top-module tpe_debug
-	verilator --lint-only -Wall -Wno-DECLFILENAME -Wno-UNUSEDPARAM -Wno-UNUSEDSIGNAL -Wno-PINCONNECTEMPTY -Wno-UNSIGNED -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC \
-		$(RTL_PKG) rtl/common/sync_fifo.sv rtl/common/dp_ram.sv \
-		rtl/matrix_engine/pe.sv rtl/matrix_engine/mac_array.sv rtl/matrix_engine/matrix_engine_ctrl.sv rtl/matrix_engine/matrix_engine.sv \
-		rtl/dma/tpe_dma.sv rtl/command_processor/tpe_cmd_proc.sv rtl/scheduler/tpe_scheduler.sv \
-		rtl/pmu/tpe_pmu.sv rtl/debug/tpe_debug.sv rtl/top/tpe_top.sv \
-		--top-module tpe_top
-	@echo "lint OK"
+lint: venv ## Lint all current RTL with verilator --lint-only (tools/lint.py is the source of truth)
+	$(PYTHON) tools/lint.py
 
 .PHONY: toolchain-smoke
 toolchain-smoke: venv ## Run the cocotb+pyuvm+Verilator toolchain smoke test
@@ -117,6 +87,39 @@ sim-top: venv model ## Run the top-level end-to-end testbench (M4/M5) -- 2/6 tes
 	source $(VENV)/bin/activate && \
 		$(MAKE) -C verif/cocotb_tb/top clean-all && \
 		$(MAKE) -C verif/cocotb_tb/top
+
+.PHONY: build-all
+build-all: venv model ## Build every block's simulation binary once (prereq for the regression tiers below)
+	source $(VENV)/bin/activate && \
+		for d in $(REGRESSION_BLOCKS); do $(MAKE) -C verif/cocotb_tb/$$d || exit 1; done
+
+.PHONY: gen-tests
+gen-tests: venv ## Regenerate verif/testlists/daily.yaml + random.yaml from standalone.yaml + smoke.yaml
+	$(PYTHON) tools/gen_tests.py
+
+.PHONY: sanity
+sanity: build-all ## Run the sanity regression tier (~1 test/block, tools/regression.py)
+	source $(VENV)/bin/activate && $(PYTHON) tools/regression.py sanity --jobs $(JOBS)
+
+.PHONY: smoke
+smoke: build-all ## Run the smoke regression tier (~17 tests) -- some FAIL by design, see docs/verification/bug_list.md
+	source $(VENV)/bin/activate && $(PYTHON) tools/regression.py smoke --jobs $(JOBS)
+
+.PHONY: daily
+daily: build-all gen-tests ## Run the daily regression tier (100 tests: directed + seeded-random) -- some FAIL by design
+	source $(VENV)/bin/activate && $(PYTHON) tools/regression.py daily --jobs $(JOBS)
+
+.PHONY: random
+random: build-all gen-tests ## Run the random regression tier (100 seeded-random tests) -- some FAIL by design
+	source $(VENV)/bin/activate && $(PYTHON) tools/regression.py random --jobs $(JOBS)
+
+.PHONY: cov-merge
+cov-merge: venv ## Merge a regression run's coverage.dat files (usage: make cov-merge SUITE=smoke)
+	$(PYTHON) tools/cov_merge.py $(SUITE)
+
+.PHONY: profile
+profile: venv ## Profile a regression run's wall-clock times/outliers (usage: make profile SUITE=smoke)
+	$(PYTHON) tools/profiler.py $(SUITE)
 
 .PHONY: clean
 clean: ## Remove simulation/build artifacts (keeps generated docs/register files)
