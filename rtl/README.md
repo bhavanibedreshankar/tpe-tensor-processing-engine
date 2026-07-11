@@ -12,11 +12,11 @@ where practical to keep this tree pure RTL).
 | `sram/` | Local SRAM scratchpad | M1 | done |
 | `matrix_engine/` | MAC array (`pe.sv`), accumulator, GEMM control | M2 | done (3 intentional bugs, see bug catalog) |
 | `dma/` | Descriptor-based DDR<->SRAM DMA engine | M3 | done (1 intentional bug, see bug catalog) |
-| `command_processor/` | AXI4-Lite MMIO, command decode/staging | M4 | pending |
-| `scheduler/` | DMA/compute arbitration, dependency tracking | M4 | pending |
+| `command_processor/` | AXI4-Lite MMIO, command decode/staging | M4 | done (1 intentional bug, see bug catalog) |
+| `scheduler/` | Sequential command dispatcher (V1 scope, see tpe_scheduler.sv) | M4 | done (1 intentional bug, see bug catalog) |
 | `pmu/` | Performance counters | M5 | pending |
 | `debug/` | Command trace buffer, error capture | M5 | pending |
-| `top/` | `tpe_top.sv` -- wires everything together | M4 | pending |
+| `top/` | `tpe_top.sv` -- wires everything together | M4 | done |
 
 `rtl/include/tpe_regs_pkg.sv` is **generated** from
 `docs/register_map/tpe_regs.yaml` -- do not hand-edit it; run `make regmap`.

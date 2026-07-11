@@ -77,7 +77,22 @@ did this run ever issue a full `MAX_BURST_BEATS`-beat burst. SVA
 mutual exclusion, and no-X on `rdata` when valid.
 
 ### 3.4 Command Processor / Scheduler (M4)
-_TBD when M4 lands._
+
+RTL-side (`verif/coverage/cmd_proc_cov.sv`, bound to `tpe_scheduler`):
+`cp_state`/`cp_arc` -- FSM state and transition coverage over the 8-state
+dispatch FSM (IDLE/POP/DECODE/DISPATCH_DMA/WAIT_DMA/DISPATCH_ME/WAIT_ME/
+COMPLETE); `cp_opcode`/`cp_status` + their cross -- every `cmd_opcode_e`
+value (including the reserved/bad-opcode path) crossed with every
+`cmd_status_e` outcome the scheduler can produce, sampled on
+`sched_done_valid`. SVA (`verif/sva/cmd_proc_sva.sv`): AXI4-Lite
+VALID-stability on all five channels of the host MMIO slave,
+`irq == |(irq_status & irq_enable)` held every cycle (this is what would
+have caught bug #6 immediately if the independent-clear test hadn't --
+worth noting since it didn't fire, meaning the assertion's invariant
+holds even *with* the bug present, a useful reminder that an assertion
+only catches violations of what it actually checks), `cmd_fifo_rd_en`
+never fires while empty, and `sched_done_valid` implies the scheduler was
+previously busy.
 
 ### 3.5 PMU / Debug (M5)
 _TBD when M5 lands._

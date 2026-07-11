@@ -52,6 +52,15 @@ lint: ## Lint all current RTL with verilator --lint-only
 		$(RTL_PKG) rtl/dma/tpe_dma.sv --top-module tpe_dma
 	verilator --lint-only -Wall -Wno-DECLFILENAME -Wno-UNUSEDSIGNAL \
 		rtl/common/dp_ram.sv verif/models/axi4_ddr_model.sv --top-module axi4_ddr_model
+	verilator --lint-only -Wall -Wno-DECLFILENAME -Wno-UNUSEDPARAM -Wno-UNUSEDSIGNAL -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC \
+		$(RTL_PKG) rtl/common/sync_fifo.sv rtl/command_processor/tpe_cmd_proc.sv --top-module tpe_cmd_proc
+	verilator --lint-only -Wall -Wno-DECLFILENAME -Wno-UNUSEDPARAM -Wno-UNUSEDSIGNAL -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC \
+		$(RTL_PKG) rtl/scheduler/tpe_scheduler.sv --top-module tpe_scheduler
+	verilator --lint-only -Wall -Wno-DECLFILENAME -Wno-UNUSEDPARAM -Wno-UNUSEDSIGNAL -Wno-PINCONNECTEMPTY -Wno-UNSIGNED -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC \
+		$(RTL_PKG) rtl/common/sync_fifo.sv rtl/common/dp_ram.sv \
+		rtl/matrix_engine/pe.sv rtl/matrix_engine/mac_array.sv rtl/matrix_engine/matrix_engine_ctrl.sv rtl/matrix_engine/matrix_engine.sv \
+		rtl/dma/tpe_dma.sv rtl/command_processor/tpe_cmd_proc.sv rtl/scheduler/tpe_scheduler.sv rtl/top/tpe_top.sv \
+		--top-module tpe_top
 	@echo "lint OK"
 
 .PHONY: toolchain-smoke
@@ -85,12 +94,18 @@ sim-dma: venv model ## Run the DMA Engine testbench (M3) -- 1/4 tests FAIL by de
 		$(MAKE) -C verif/cocotb_tb/dma clean-all && \
 		$(MAKE) -C verif/cocotb_tb/dma
 
+.PHONY: sim-top
+sim-top: venv model ## Run the top-level end-to-end testbench (M4) -- 2/5 tests FAIL by design, see docs/verification/bug_list.md
+	source $(VENV)/bin/activate && \
+		$(MAKE) -C verif/cocotb_tb/top clean-all && \
+		$(MAKE) -C verif/cocotb_tb/top
+
 .PHONY: clean
 clean: ## Remove simulation/build artifacts (keeps generated docs/register files)
 	find . -name sim_build -type d -not -path './.venv/*' -exec rm -rf {} + 2>/dev/null || true
 	find . -name '__pycache__' -type d -not -path './.venv/*' -exec rm -rf {} + 2>/dev/null || true
 	find . \( -name 'coverage.dat' -o -name 'dump.vcd' -o -name 'results.xml' \) -not -path './.venv/*' -delete 2>/dev/null || true
-	find . \( -name '*_coverage.xml' -o -name '*_scoreboard_work' -o -name 'matmul_scoreboard_work' -o -name 'dma_scoreboard_work' \) -not -path './.venv/*' -exec rm -rf {} + 2>/dev/null || true
+	find . \( -name '*_coverage.xml' -o -name '*_scoreboard_work' -o -name 'matmul_scoreboard_work' -o -name 'dma_scoreboard_work' -o -name 'top_scoreboard_work' \) -not -path './.venv/*' -exec rm -rf {} + 2>/dev/null || true
 	rm -rf verif/cocotb_tb/smoke/sim_build
 	$(MAKE) -C model clean
 	@echo "clean OK"

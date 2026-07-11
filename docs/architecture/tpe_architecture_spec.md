@@ -48,12 +48,14 @@ the command FIFO. Validates opcode/dimensions, raises `CMD_ERROR` on bad
 input, raises `CMD_DONE` on completion (see `IRQ_STATUS`/`IRQ_ENABLE`).
 
 ### 3.2 Instruction Scheduler (`rtl/scheduler/`)
-Pulls commands off the command FIFO and arbitrates DMA vs. Matrix Engine
-issue so the two can overlap (e.g. prefetch the next tile's weights while
-the current tile computes). V1 scope: two-way arbitration between one DMA
-channel and the Matrix Engine, dependency tracking via a simple
-scoreboard-bit per SRAM region (a command that writes a region blocks a
-later command that reads it until the writer completes).
+Pulls commands off the command FIFO and dispatches each to the DMA Engine
+or Matrix Engine. **As implemented in V1, this is a sequential dispatcher**:
+one command runs to completion before the next is popped -- no overlap
+between DMA prefetch and compute. The original vision of arbitrating so the
+two *can* overlap (prefetching tile N+1's weights while tile N computes) is
+explicitly a V2 "improved scheduler" item (see `tpe_scheduler.sv`'s header
+comment and the roadmap below), consistent with the vision doc's own
+phasing.
 
 ### 3.3 DMA Engine (`rtl/dma/`)
 Descriptor-based mover between DDR (AXI4 master) and the Local SRAM
@@ -64,9 +66,15 @@ out of scope here.
 
 ### 3.4 Local SRAM / Scratchpad (`rtl/sram/`)
 Dual-port, byte-addressable-via-strobe scratchpad (`SRAM_DEPTH` x
-`SRAM_DATA_WIDTH` = 4096 x 128b = 64KB). One port serves DMA fill/drain, the
-other serves the Matrix Engine's input/output buffers. Deterministic
-single-cycle-plus-pipeline-latency access, no cache coherence to verify.
+`SRAM_DATA_WIDTH` = 4096 x 128b = 64KB). Designed for one port to serve DMA
+fill/drain and the other the Matrix Engine's input/output buffers, and
+fully verified standalone as such (M1). **Not instantiated in the V1 top
+level** (`rtl/top/tpe_top.sv`): V1's matmul-only command flow addresses
+Matrix Engine's four internal buffers (weight/activation/seed/output)
+directly as the "Local SRAM" region, routed to by the Scheduler per
+command (see `tpe_top.sv`'s header comment for the full reasoning). This
+block remains available for a V2+ multi-engine/multi-channel scheduler to
+wire in as an actual shared scratchpad between multiple consumers.
 
 ### 3.5 Matrix Compute Engine (`rtl/matrix_engine/`)
 Weight-stationary systolic array, default `MAC_ARRAY_ROWS` x
@@ -90,10 +98,20 @@ the simulator's assertion log, not modeled as a register (see the
 
 ## 4. Interfaces
 
-- **Host MMIO**: AXI4-Lite, `AXIL_ADDR_WIDTH`=16, `AXIL_DATA_WIDTH`=32.
+- **Host MMIO**: AXI4-Lite, `AXIL_ADDR_WIDTH`=16, `AXIL_DATA_WIDTH`=32,
+  implemented on `rtl/command_processor/tpe_cmd_proc.sv`'s `s_*` ports. V1
+  simplification: AWVALID and WVALID must be presented together (one
+  outstanding transaction, no independent AW/W channel timing) -- see that
+  file's header comment. As flat port lists rather than a SystemVerilog
+  `interface` construct throughout this repo (avoids cocotb/Verilator VPI
+  access friction with `interface`-typed ports, which the M0-M4 pattern of
+  plain ports never ran into).
 - **DDR memory**: AXI4, `AXI_ADDR_WIDTH`=32, `AXI_DATA_WIDTH`=128,
-  `AXI_ID_WIDTH`=4, burst-capable (`AXI_LEN_WIDTH`=8). Defined in
-  `rtl/include/axi4_if.sv` / `axi4_lite_if.sv` (added in the DMA milestone).
+  `AXI_ID_WIDTH`=4, INCR-burst-capable (`AXI_LEN_WIDTH`=8, capped at
+  `MAX_BURST_BEATS`=16 beats/burst in `tpe_dma.sv`), on `tpe_top.sv`'s
+  `m_*` ports. In simulation this connects to the behavioral
+  `verif/models/axi4_ddr_model.sv`; on real silicon it would connect to an
+  actual DDR controller.
 - **Interrupt**: single-bit level interrupt, asserted while any enabled bit
   in `IRQ_STATUS` is set, cleared by writing 1 to that bit.
 
@@ -106,6 +124,11 @@ the simulator's assertion log, not modeled as a register (see the
 4. Host stores result:  stage CMD_STORE + addrs -> CMD_PUSH
 5. Host waits for CMD_DONE interrupt (or polls CP_STATUS.BUSY)
 ```
+
+Implemented and verified end-to-end in M4 -- see
+`verif/cocotb_tb/top/test_top.py`'s `matmul_flow_test`, driven entirely
+over the real AXI4-Lite MMIO interface (no backdoor RTL access except to
+the external DDR model).
 
 Activation functions (ReLU/GELU), quantization, multi-channel DMA, and
 attention-specific ops are explicitly **V2/V3** per the roadmap below and are

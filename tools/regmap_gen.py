@@ -26,6 +26,7 @@ YAML_PATH = REPO_ROOT / "docs" / "register_map" / "tpe_regs.yaml"
 
 SV_OUT = REPO_ROOT / "rtl" / "include" / "tpe_regs_pkg.sv"
 CPP_OUT = REPO_ROOT / "model" / "include" / "tpe_regs.h"
+PY_OUT = REPO_ROOT / "verif" / "cocotb_tb" / "env" / "tpe_regs.py"
 MD_OUT = REPO_ROOT / "docs" / "register_map" / "generated" / "register_map.md"
 
 GENERATED_BANNER = (
@@ -174,6 +175,32 @@ inline constexpr int {{ reg.full_name }}_{{ f.name }}_LSB = {{ f.lsb }};
 """
 )
 
+PY_TEMPLATE = Template(
+    """\
+# {{ banner_lines[0] }}
+# {{ banner_lines[1] }}
+# {{ banner_lines[2] }}
+\"\"\"Register addresses/masks for cocotb testbenches driving AXI4-Lite MMIO
+directly (see verif/cocotb_tb/env/axi4_lite_driver.py).\"\"\"
+
+{% for block in blocks %}
+# ---------------------------------------------------------------------
+# {{ block.name | upper }} block -- base 0x{{ '%04x' % block.base_address }}
+# {{ block.description }}
+# ---------------------------------------------------------------------
+{{ block.name | upper }}_BASE_ADDR = 0x{{ '%04x' % block.base_address }}
+{% for reg in block.registers %}
+{{ reg.full_name }}_ADDR = 0x{{ '%04x' % reg.abs_addr }}
+{{ reg.full_name }}_RESET = 0x{{ '%08x' % reg.reset }}
+{% for f in reg.fields %}
+{{ reg.full_name }}_{{ f.name }}_MASK = 0x{{ '%08x' % f.mask }}
+{{ reg.full_name }}_{{ f.name }}_LSB = {{ f.lsb }}
+{% endfor %}
+{% endfor %}
+{% endfor %}
+"""
+)
+
 MD_TEMPLATE = Template(
     """\
 <!--
@@ -225,6 +252,9 @@ def main() -> int:
     CPP_OUT.parent.mkdir(parents=True, exist_ok=True)
     CPP_OUT.write_text(CPP_TEMPLATE.render(blocks=blocks, banner_lines=banner_lines))
 
+    PY_OUT.parent.mkdir(parents=True, exist_ok=True)
+    PY_OUT.write_text(PY_TEMPLATE.render(blocks=blocks, banner_lines=banner_lines))
+
     MD_OUT.parent.mkdir(parents=True, exist_ok=True)
     MD_OUT.write_text(
         MD_TEMPLATE.render(
@@ -240,6 +270,7 @@ def main() -> int:
     print(f"regmap_gen: {len(blocks)} blocks, {total_regs} registers")
     print(f"  wrote {SV_OUT.relative_to(REPO_ROOT)}")
     print(f"  wrote {CPP_OUT.relative_to(REPO_ROOT)}")
+    print(f"  wrote {PY_OUT.relative_to(REPO_ROOT)}")
     print(f"  wrote {MD_OUT.relative_to(REPO_ROOT)}")
     return 0
 

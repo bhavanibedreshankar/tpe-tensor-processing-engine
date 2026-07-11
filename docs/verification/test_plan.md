@@ -65,14 +65,22 @@ maintained next to its testbench in `verif/cocotb_tb/<block>/README.md`,
 added as that block's milestone lands. This section tracks the
 cross-cutting scenarios that only make sense at integration level.
 
-### 3.1 End-to-end (top-level, M4)
+### 3.1 End-to-end (top-level, M4) -- done, see `verif/cocotb_tb/top/README.md`
 - Load weights -> load activations -> matmul -> store -> completion IRQ
   (the vision doc's canonical example, minus activation function -- V2).
-- Back-to-back commands with the scheduler overlapping DMA of tile N+1 with
-  compute of tile N.
-- Error injection: bad opcode, out-of-range SRAM address, dimension that
-  exceeds `MAX_TILE_DIM` -- confirm `CMD_ERROR` + `ERROR_CODE`/`ERROR_TAG`
-  latch correctly and the command FIFO recovers (next command still runs).
+  `matmul_flow_test`.
+- IRQ assert/status/write-1-to-clear. `irq_test`,
+  `irq_independent_clear_test` (the latter also catches bug #6).
+- Error injection: unrecognized opcode, out-of-range dimension (`STAT_BAD_
+  OPCODE`/`STAT_BAD_DIM`), administrative opcodes (NOP/BARRIER) that
+  complete without dispatching an engine. `error_handling_test`.
+- Boundary: `dim_n == COLS` exactly (catches bug #5). `matmul_full_width_
+  test`.
+- **Deferred to V2** (see `rtl/scheduler/tpe_scheduler.sv`'s header
+  comment): V1's scheduler is a sequential dispatcher, not an
+  out-of-order/overlapped arbiter, so "DMA of tile N+1 overlapping compute
+  of tile N" isn't applicable yet. `ERROR_CODE`/`ERROR_TAG` latching is the
+  Debug block's job (M5), not yet implemented.
 
 ### 3.2 Reset / power-on
 - Register reset values match `docs/register_map/tpe_regs.yaml` exactly
@@ -119,6 +127,6 @@ land; each is removed once its milestone's section above is filled in.
 - [x] Local SRAM detailed test list (M1) -- see `verif/cocotb_tb/sram/README.md`
 - [x] Matrix Compute Engine detailed test list (M2) -- see `verif/cocotb_tb/matrix_engine/README.md`
 - [x] DMA Engine detailed test list (M3) -- see `verif/cocotb_tb/dma/README.md`
-- [ ] Command Processor / Scheduler detailed test list (M4)
+- [x] Command Processor / Scheduler detailed test list (M4) -- see `verif/cocotb_tb/top/README.md`
 - [ ] PMU / Debug detailed test list (M5)
 - [ ] Coverage closure report template (M6)
