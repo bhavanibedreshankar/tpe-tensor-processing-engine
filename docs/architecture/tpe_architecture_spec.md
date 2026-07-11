@@ -86,26 +86,50 @@ to `MAX_TILE_DIM` in each of M/K/N. Internally: input buffers -> MAC array
 ### 3.6 Performance Monitor Unit (`rtl/pmu/`)
 Free-running counters exposed via the `pmu` register block: cycle count,
 MAC-active cycles, DMA-wait cycles, scheduler-stall cycles, idle cycles, and
-last-command latency. Counters reset via `PMU_CTRL.RESET_COUNTERS` and can
-be gated via `PMU_CTRL.ENABLE`.
+last-command latency. Counters reset via `PMU_CTRL.RESET_COUNTERS` (level-
+sensitive -- counters stay pinned at 0 for as long as it's held) and gated
+via `PMU_CTRL.ENABLE`. The event inputs (`mac_active`/`dma_wait`/
+`sched_stall`/`sched_idle`/`dispatch_start`/`cmd_done_valid`) are an
+integration-level view sourced from `tpe_scheduler.sv` (plus `me_busy`
+directly for `mac_active`) -- see `tpe_scheduler.sv`'s "PMU instrumentation"
+section for exact per-signal semantics (dispatch-active span, stall vs.
+idle classification). `tpe_pmu.sv` is its own independent AXI4-Lite slave,
+same flat-port pattern as `tpe_cmd_proc.sv`; see section 4 for how the host
+reaches it.
 
 ### 3.7 Debug Infrastructure (`rtl/debug/`)
 Command trace buffer (opcode/tag/status per completed command, popped via
 `DEBUG_TRACE_RDATA`) plus latched error code/tag for the most recent error
-(`DEBUG_ERROR_CODE`/`DEBUG_ERROR_TAG`). Assertion status is observed through
-the simulator's assertion log, not modeled as a register (see the
-[verification test plan](../verification/test_plan.md)).
+(`DEBUG_ERROR_CODE`/`DEBUG_ERROR_TAG`, latched independently of tracing --
+they still update even with `DEBUG_CTRL.TRACE_ENABLE=0`). Assertion status
+is observed through the simulator's assertion log, not modeled as a
+register (see the [verification test plan](../verification/test_plan.md)).
+Also its own independent AXI4-Lite slave; its `TRACE_RDATA` register is the
+only *popping* read in this repo's register map, which needs one extra
+FSM state versus every other read here (see `tpe_debug.sv`'s header
+comment).
 
 ## 4. Interfaces
 
-- **Host MMIO**: AXI4-Lite, `AXIL_ADDR_WIDTH`=16, `AXIL_DATA_WIDTH`=32,
-  implemented on `rtl/command_processor/tpe_cmd_proc.sv`'s `s_*` ports. V1
-  simplification: AWVALID and WVALID must be presented together (one
-  outstanding transaction, no independent AW/W channel timing) -- see that
-  file's header comment. As flat port lists rather than a SystemVerilog
-  `interface` construct throughout this repo (avoids cocotb/Verilator VPI
-  access friction with `interface`-typed ports, which the M0-M4 pattern of
-  plain ports never ran into).
+- **Host MMIO**: AXI4-Lite, `AXIL_ADDR_WIDTH`=16, `AXIL_DATA_WIDTH`=32, on
+  `tpe_top.sv`'s `s_*` ports. `tpe_top.sv` decodes the live AWADDR/ARADDR's
+  block bits and routes to whichever of `tpe_cmd_proc.sv` (`cp`, base
+  `0x0000`), `tpe_pmu.sv` (`pmu`, base `0x3000`), or `tpe_debug.sv`
+  (`debug`, base `0x4000`) the address falls in -- `dma`/`matrix_engine`
+  have no V1 AXI4-Lite window (the Scheduler drives those directly, see
+  section 3.1's implementation note), and any other address falls to a
+  default sink so the bus can't hang. Each of the three real slaves shares
+  the same V1 simplification: AWVALID and WVALID must be presented
+  together (one outstanding transaction, no independent AW/W channel
+  timing) -- see `tpe_cmd_proc.sv`'s header comment. The router itself is a
+  further V1 simplification: address decode is purely combinational off
+  the live AWADDR/ARADDR, safe only because every V1 AXI4-Lite
+  master/slave here holds the address stable from request through
+  response (see `tpe_top.sv`'s header comment) -- a full crossbar with
+  per-transaction address latching is out of scope. As flat port lists
+  rather than a SystemVerilog `interface` construct throughout this repo
+  (avoids cocotb/Verilator VPI access friction with `interface`-typed
+  ports, which the M0-M5 pattern of plain ports never ran into).
 - **DDR memory**: AXI4, `AXI_ADDR_WIDTH`=32, `AXI_DATA_WIDTH`=128,
   `AXI_ID_WIDTH`=4, INCR-burst-capable (`AXI_LEN_WIDTH`=8, capped at
   `MAX_BURST_BEATS`=16 beats/burst in `tpe_dma.sv`), on `tpe_top.sv`'s

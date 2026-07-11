@@ -25,6 +25,14 @@ from verif.cocotb_tb.env.tpe_regs import (
     CP_IRQ_ENABLE_ADDR,
     CP_IRQ_STATUS_ADDR,
     CP_IRQ_STATUS_CMD_DONE_LSB,
+    PMU_CTRL_ADDR,
+    PMU_CTRL_ENABLE_LSB,
+    PMU_CYCLE_COUNT_ADDR,
+    DEBUG_CTRL_ADDR,
+    DEBUG_CTRL_TRACE_ENABLE_LSB,
+    DEBUG_TRACE_RDATA_ADDR,
+    DEBUG_ERROR_CODE_ADDR,
+    DEBUG_ERROR_TAG_ADDR,
 )
 from verif.cocotb_tb.env.tpe_base_test import TpeBaseTest
 from verif.cocotb_tb.top.env import TopEnv
@@ -213,6 +221,55 @@ class IrqIndependentClearTest(TpeBaseTest):
         )
 
 
+class PmuDebugIntegrationTest(TpeBaseTest):
+    """M5: proves the real top-level host MMIO address router (rtl/top/
+    tpe_top.sv) actually reaches PMU and Debug, not just Command Processor
+    -- something no standalone tpe_pmu/tpe_debug testbench can exercise on
+    its own, since those drive the event/completion inputs directly rather
+    than through a real Scheduler + router. Runs two real commands (one
+    OK, one bad-opcode) over the real AXI4-Lite MMIO port and checks PMU's
+    cycle counter advanced and Debug's trace/error registers captured both
+    completions correctly."""
+
+    def build_phase(self):
+        ConfigDB().set(None, "*", "DUT", cocotb.top)
+        self.env = TopEnv("env", self, ddr_depth=DDR_DEPTH)
+
+    async def run_test_body(self):
+        dut = cocotb.top
+        axi = Axi4LiteDriver(dut, dut.clk, "s_")
+        await enable_cp(axi)
+
+        await axi.write(PMU_CTRL_ADDR, 1 << PMU_CTRL_ENABLE_LSB)
+        await axi.write(DEBUG_CTRL_ADDR, 1 << DEBUG_CTRL_TRACE_ENABLE_LSB)
+
+        status = await run_command(dut, axi, dut.clk, CMD_NOP, tag=0x50)
+        assert status_last_status(status) == STAT_OK
+
+        BAD_OPCODE = 0x6
+        status = await run_command(dut, axi, dut.clk, BAD_OPCODE, tag=0x51)
+        assert status_last_status(status) == 1  # STAT_BAD_OPCODE
+
+        cycles = await axi.read(PMU_CYCLE_COUNT_ADDR)
+        assert cycles > 0, f"PMU_CYCLE_COUNT={cycles} after two commands, want >0 (router not reaching PMU?)"
+
+        e0 = await axi.read(DEBUG_TRACE_RDATA_ADDR)
+        assert (e0 & 0xF, (e0 >> 4) & 0xFFF, (e0 >> 16) & 0x7) == (CMD_NOP, 0x50, STAT_OK), (
+            f"debug trace entry0={e0:#x}, want (opcode=NOP, tag=0x50, status=OK) "
+            "(router not reaching Debug?)"
+        )
+        e1 = await axi.read(DEBUG_TRACE_RDATA_ADDR)
+        assert (e1 & 0xF, (e1 >> 4) & 0xFFF, (e1 >> 16) & 0x7) == (BAD_OPCODE, 0x51, 1), (
+            f"debug trace entry1={e1:#x}, want (opcode=0x6, tag=0x51, status=BAD_OPCODE)"
+        )
+
+        error_code = await axi.read(DEBUG_ERROR_CODE_ADDR)
+        error_tag = await axi.read(DEBUG_ERROR_TAG_ADDR)
+        assert error_code == 1 and error_tag == 0x51, (
+            f"debug error latch: code={error_code} tag={error_tag:#x}, want code=1(BAD_OPCODE) tag=0x51"
+        )
+
+
 class IrqTest(TpeBaseTest):
     def build_phase(self):
         ConfigDB().set(None, "*", "DUT", cocotb.top)
@@ -282,3 +339,8 @@ async def matmul_full_width_test(dut):
 @cocotb.test()
 async def irq_independent_clear_test(dut):
     await _run("IrqIndependentClearTest", dut)
+
+
+@cocotb.test()
+async def pmu_debug_integration_test(dut):
+    await _run("PmuDebugIntegrationTest", dut)

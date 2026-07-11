@@ -19,6 +19,13 @@
 // at the default ROWS=COLS=16 array size); storing reads through
 // g_obuf_chunk_adapter below since out_buf's row (COLS*ACCUM_WIDTH=512b) is
 // 4x wider than one AXI beat.
+//
+// M5 adds a host MMIO address router in front of {cp, pmu, debug} -- three
+// independent AXI4-Lite slaves, decoded on the live AWADDR/ARADDR's block
+// bits (see the router below). dma/matrix_engine still have no V1 AXI4-
+// Lite window (per tpe_cmd_proc.sv's header comment); an access to their
+// address range, or any other undecoded range, falls to a default sink so
+// the bus can't hang.
 module tpe_top
   import tpe_pkg::*;
 #(
@@ -83,23 +90,82 @@ module tpe_top
     output logic                      m_rready
 );
 
+  // ---- Host MMIO address router: cp / pmu / debug -------------------------
+  // 4KB-aligned blocks (docs/register_map/tpe_regs.yaml), selected by
+  // address bits [15:12]. V1 simplification: decode is purely combinational
+  // off the live AWADDR/ARADDR -- safe because every V1 AXI4-Lite slave
+  // here (and the reference Axi4LiteDriver) holds the address stable from
+  // request through response, same style of simplification as
+  // tpe_cmd_proc.sv's AWVALID+WVALID-together note. A full crossbar with
+  // per-transaction address latching is out of V1 scope.
+  localparam logic [3:0] BlkCp = 4'h0;
+  localparam logic [3:0] BlkPmu = 4'h3;
+  localparam logic [3:0] BlkDebug = 4'h4;
+
+  wire wr_is_cp = (s_awaddr[15:12] == BlkCp);
+  wire wr_is_pmu = (s_awaddr[15:12] == BlkPmu);
+  wire wr_is_debug = (s_awaddr[15:12] == BlkDebug);
+  wire wr_is_none = !(wr_is_cp || wr_is_pmu || wr_is_debug);
+
+  wire rd_is_cp = (s_araddr[15:12] == BlkCp);
+  wire rd_is_pmu = (s_araddr[15:12] == BlkPmu);
+  wire rd_is_debug = (s_araddr[15:12] == BlkDebug);
+  wire rd_is_none = !(rd_is_cp || rd_is_pmu || rd_is_debug);
+
+  logic cp_awready, cp_wready, cp_bvalid; logic [1:0] cp_bresp;
+  logic cp_arready, cp_rvalid; logic [AXIL_DATA_WIDTH-1:0] cp_rdata; logic [1:0] cp_rresp;
+  logic pmu_awready, pmu_wready, pmu_bvalid; logic [1:0] pmu_bresp;
+  logic pmu_arready, pmu_rvalid; logic [AXIL_DATA_WIDTH-1:0] pmu_rdata; logic [1:0] pmu_rresp;
+  logic debug_awready, debug_wready, debug_bvalid; logic [1:0] debug_bresp;
+  logic debug_arready, debug_rvalid; logic [AXIL_DATA_WIDTH-1:0] debug_rdata; logic [1:0] debug_rresp;
+
+  // Default sink for addresses outside {cp,pmu,debug} (dma/matrix_engine
+  // don't have a V1 AXI4-Lite window) -- absorbs writes/reads with OKAY/0
+  // instead of letting the bus hang on a stray access.
+  logic none_wresp_q, none_rresp_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) none_wresp_q <= 1'b0;
+    else if (wr_is_none && s_awvalid && s_wvalid && !none_wresp_q) none_wresp_q <= 1'b1;
+    else if (none_wresp_q && s_bready) none_wresp_q <= 1'b0;
+  end
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) none_rresp_q <= 1'b0;
+    else if (rd_is_none && s_arvalid && !none_rresp_q) none_rresp_q <= 1'b1;
+    else if (none_rresp_q && s_rready) none_rresp_q <= 1'b0;
+  end
+  wire none_awready = wr_is_none && !none_wresp_q;
+  wire none_wready  = none_awready;
+  wire none_arready = rd_is_none && !none_rresp_q;
+
+  assign s_awready = wr_is_cp ? cp_awready : wr_is_pmu ? pmu_awready : wr_is_debug ? debug_awready : none_awready;
+  assign s_wready  = wr_is_cp ? cp_wready  : wr_is_pmu ? pmu_wready  : wr_is_debug ? debug_wready  : none_wready;
+  assign s_bvalid  = wr_is_cp ? cp_bvalid  : wr_is_pmu ? pmu_bvalid  : wr_is_debug ? debug_bvalid  : none_wresp_q;
+  assign s_bresp   = wr_is_cp ? cp_bresp   : wr_is_pmu ? pmu_bresp   : wr_is_debug ? debug_bresp   : 2'b00;
+
+  assign s_arready = rd_is_cp ? cp_arready : rd_is_pmu ? pmu_arready : rd_is_debug ? debug_arready : none_arready;
+  assign s_rvalid  = rd_is_cp ? cp_rvalid  : rd_is_pmu ? pmu_rvalid  : rd_is_debug ? debug_rvalid  : none_rresp_q;
+  assign s_rdata   = rd_is_cp ? cp_rdata   : rd_is_pmu ? pmu_rdata   : rd_is_debug ? debug_rdata   : 32'h0;
+  assign s_rresp   = rd_is_cp ? cp_rresp   : rd_is_pmu ? pmu_rresp   : rd_is_debug ? debug_rresp   : 2'b00;
+
   // ---- Command Processor <-> Scheduler -----------------------------------
   logic         cmd_fifo_empty, cmd_fifo_rd_en, cmd_fifo_rd_valid;
   tpe_command_t cmd_fifo_rd_data;
   logic         sched_done_valid, sched_busy;
   logic [11:0]  sched_done_tag;
   cmd_status_e  sched_done_status;
+  cmd_opcode_e  sched_done_opcode;
+  logic         sched_dispatch_start, sched_stall, sched_idle, sched_dma_wait;
 
   tpe_cmd_proc #(
       .CMD_FIFO_DEPTH(CMD_FIFO_DEPTH)
   ) u_cmd_proc (
       .clk  (clk),
       .rst_n(rst_n),
-      .s_awvalid(s_awvalid), .s_awaddr(s_awaddr), .s_awready(s_awready),
-      .s_wvalid(s_wvalid), .s_wdata(s_wdata), .s_wstrb(s_wstrb), .s_wready(s_wready),
-      .s_bvalid(s_bvalid), .s_bresp(s_bresp), .s_bready(s_bready),
-      .s_arvalid(s_arvalid), .s_araddr(s_araddr), .s_arready(s_arready),
-      .s_rvalid(s_rvalid), .s_rdata(s_rdata), .s_rresp(s_rresp), .s_rready(s_rready),
+      .s_awvalid(s_awvalid && wr_is_cp), .s_awaddr(s_awaddr), .s_awready(cp_awready),
+      .s_wvalid(s_wvalid && wr_is_cp), .s_wdata(s_wdata), .s_wstrb(s_wstrb), .s_wready(cp_wready),
+      .s_bvalid(cp_bvalid), .s_bresp(cp_bresp), .s_bready(s_bready),
+      .s_arvalid(s_arvalid && rd_is_cp), .s_araddr(s_araddr), .s_arready(cp_arready),
+      .s_rvalid(cp_rvalid), .s_rdata(cp_rdata), .s_rresp(cp_rresp), .s_rready(s_rready),
       .irq(irq),
       .cmd_fifo_empty(cmd_fifo_empty),
       .cmd_fifo_rd_en(cmd_fifo_rd_en),
@@ -109,6 +175,36 @@ module tpe_top
       .sched_done_tag(sched_done_tag),
       .sched_done_status(sched_done_status),
       .sched_busy(sched_busy)
+  );
+
+  tpe_pmu u_pmu (
+      .clk  (clk),
+      .rst_n(rst_n),
+      .s_awvalid(s_awvalid && wr_is_pmu), .s_awaddr(s_awaddr), .s_awready(pmu_awready),
+      .s_wvalid(s_wvalid && wr_is_pmu), .s_wdata(s_wdata), .s_wstrb(s_wstrb), .s_wready(pmu_wready),
+      .s_bvalid(pmu_bvalid), .s_bresp(pmu_bresp), .s_bready(s_bready),
+      .s_arvalid(s_arvalid && rd_is_pmu), .s_araddr(s_araddr), .s_arready(pmu_arready),
+      .s_rvalid(pmu_rvalid), .s_rdata(pmu_rdata), .s_rresp(pmu_rresp), .s_rready(s_rready),
+      .mac_active(me_busy),
+      .dma_wait(sched_dma_wait),
+      .sched_stall(sched_stall),
+      .sched_idle(sched_idle),
+      .dispatch_start(sched_dispatch_start),
+      .cmd_done_valid(sched_done_valid)
+  );
+
+  tpe_debug u_debug (
+      .clk  (clk),
+      .rst_n(rst_n),
+      .s_awvalid(s_awvalid && wr_is_debug), .s_awaddr(s_awaddr), .s_awready(debug_awready),
+      .s_wvalid(s_wvalid && wr_is_debug), .s_wdata(s_wdata), .s_wstrb(s_wstrb), .s_wready(debug_wready),
+      .s_bvalid(debug_bvalid), .s_bresp(debug_bresp), .s_bready(s_bready),
+      .s_arvalid(s_arvalid && rd_is_debug), .s_araddr(s_araddr), .s_arready(debug_arready),
+      .s_rvalid(debug_rvalid), .s_rdata(debug_rdata), .s_rresp(debug_rresp), .s_rready(s_rready),
+      .sched_done_valid(sched_done_valid),
+      .sched_done_tag(sched_done_tag),
+      .sched_done_status(sched_done_status),
+      .sched_done_opcode(sched_done_opcode)
   );
 
   // ---- Scheduler <-> DMA / Matrix Engine ----------------------------------
@@ -136,7 +232,12 @@ module tpe_top
       .sched_done_valid(sched_done_valid),
       .sched_done_tag(sched_done_tag),
       .sched_done_status(sched_done_status),
+      .sched_done_opcode(sched_done_opcode),
       .sched_busy(sched_busy),
+      .sched_dispatch_start(sched_dispatch_start),
+      .sched_stall(sched_stall),
+      .sched_idle(sched_idle),
+      .sched_dma_wait(sched_dma_wait),
       .dma_desc_mem_addr(dma_desc_mem_addr),
       .dma_desc_sram_addr(dma_desc_sram_addr),
       .dma_desc_len(dma_desc_len),

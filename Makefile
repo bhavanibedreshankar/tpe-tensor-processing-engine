@@ -56,10 +56,15 @@ lint: ## Lint all current RTL with verilator --lint-only
 		$(RTL_PKG) rtl/common/sync_fifo.sv rtl/command_processor/tpe_cmd_proc.sv --top-module tpe_cmd_proc
 	verilator --lint-only -Wall -Wno-DECLFILENAME -Wno-UNUSEDPARAM -Wno-UNUSEDSIGNAL -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC \
 		$(RTL_PKG) rtl/scheduler/tpe_scheduler.sv --top-module tpe_scheduler
+	verilator --lint-only -Wall -Wno-DECLFILENAME -Wno-UNUSEDPARAM -Wno-UNUSEDSIGNAL -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC \
+		$(RTL_PKG) rtl/pmu/tpe_pmu.sv --top-module tpe_pmu
+	verilator --lint-only -Wall -Wno-DECLFILENAME -Wno-UNUSEDPARAM -Wno-UNUSEDSIGNAL -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC \
+		$(RTL_PKG) rtl/common/sync_fifo.sv rtl/debug/tpe_debug.sv --top-module tpe_debug
 	verilator --lint-only -Wall -Wno-DECLFILENAME -Wno-UNUSEDPARAM -Wno-UNUSEDSIGNAL -Wno-PINCONNECTEMPTY -Wno-UNSIGNED -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC \
 		$(RTL_PKG) rtl/common/sync_fifo.sv rtl/common/dp_ram.sv \
 		rtl/matrix_engine/pe.sv rtl/matrix_engine/mac_array.sv rtl/matrix_engine/matrix_engine_ctrl.sv rtl/matrix_engine/matrix_engine.sv \
-		rtl/dma/tpe_dma.sv rtl/command_processor/tpe_cmd_proc.sv rtl/scheduler/tpe_scheduler.sv rtl/top/tpe_top.sv \
+		rtl/dma/tpe_dma.sv rtl/command_processor/tpe_cmd_proc.sv rtl/scheduler/tpe_scheduler.sv \
+		rtl/pmu/tpe_pmu.sv rtl/debug/tpe_debug.sv rtl/top/tpe_top.sv \
 		--top-module tpe_top
 	@echo "lint OK"
 
@@ -94,8 +99,21 @@ sim-dma: venv model ## Run the DMA Engine testbench (M3) -- 1/4 tests FAIL by de
 		$(MAKE) -C verif/cocotb_tb/dma clean-all && \
 		$(MAKE) -C verif/cocotb_tb/dma
 
+.PHONY: sim-pmu
+sim-pmu: venv ## Run the PMU testbench (M5) -- 1/2 tests FAIL by design, see docs/verification/bug_list.md
+	source $(VENV)/bin/activate && \
+		$(MAKE) -C verif/cocotb_tb/pmu clean-all && \
+		$(MAKE) -C verif/cocotb_tb/pmu
+
+.PHONY: sim-debug
+sim-debug: venv ## Run the Debug infrastructure testbench (M5)
+	source $(VENV)/bin/activate && \
+		$(MAKE) -C verif/cocotb_tb/debug clean-all && \
+		$(MAKE) -C verif/cocotb_tb/debug
+	@echo "debug testbench PASSED"
+
 .PHONY: sim-top
-sim-top: venv model ## Run the top-level end-to-end testbench (M4) -- 2/5 tests FAIL by design, see docs/verification/bug_list.md
+sim-top: venv model ## Run the top-level end-to-end testbench (M4/M5) -- 2/6 tests FAIL by design, see docs/verification/bug_list.md
 	source $(VENV)/bin/activate && \
 		$(MAKE) -C verif/cocotb_tb/top clean-all && \
 		$(MAKE) -C verif/cocotb_tb/top

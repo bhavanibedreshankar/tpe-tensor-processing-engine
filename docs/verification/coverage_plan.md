@@ -95,7 +95,20 @@ never fires while empty, and `sched_done_valid` implies the scheduler was
 previously busy.
 
 ### 3.5 PMU / Debug (M5)
-_TBD when M5 lands._
+
+RTL-side (`verif/coverage/pmu_cov.sv`, bound to `tpe_pmu`): `cp_enable`/
+`cp_reset` -- did a run exercise both states of `CTRL.ENABLE` and
+`CTRL.RESET_COUNTERS`; `cp_mac_active`/`cp_dma_wait`/`cp_sched_stall`/
+`cp_sched_idle` -- did each event class actually toggle while counting was
+live (`CTRL.ENABLE=1 && !RESET_COUNTERS`). RTL-side
+(`verif/coverage/debug_cov.sv`, bound to `tpe_debug`): `cp_enable` --
+`CTRL.TRACE_ENABLE` toggled; `cp_fill` -- trace FIFO seen empty/mid/full;
+`cp_opcode`/`cp_status` (sampled on `trace_wr_en`) -- same opcode/status
+bin set as `matrix_engine_cov.sv`'s scheduler crosses, applied to what
+actually got traced. SVA (`verif/sva/pmu_sva.sv`): standard AXI4-Lite
+VALID-stability plus `cycle_count_q` monotonicity (never decreases outside
+`RESET_COUNTERS`); (`verif/sva/debug_sva.sv`): VALID-stability plus
+`trace_rd_en` never fires while the trace FIFO is empty.
 
 ## 4. Coverage closure process
 

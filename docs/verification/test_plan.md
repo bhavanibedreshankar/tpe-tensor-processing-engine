@@ -89,6 +89,15 @@ cross-cutting scenarios that only make sense at integration level.
 - Mid-operation soft reset (`CP_CTRL.SOFT_RESET`) leaves the design in a
   clean, re-startable state (no stuck FIFOs, no latched errors).
 
+### 3.3 PMU / Debug MMIO routing (M5) -- done, see `verif/cocotb_tb/top/README.md`
+- `pmu_debug_integration_test`: proves the real host MMIO address router in
+  `tpe_top.sv` reaches PMU and Debug (not just Command Processor) via real
+  Scheduler-driven events/completions -- the one thing the standalone
+  PMU/Debug testbenches (per-block detail in `verif/cocotb_tb/pmu/README.md`
+  and `verif/cocotb_tb/debug/README.md`) can't exercise on their own, since
+  those drive PMU/Debug's inputs directly rather than through a real
+  Scheduler.
+
 ## 4. Coverage goals (V1 exit criteria)
 
 - 100% line coverage on all `rtl/*/` blocks except `rtl/top/` glue
@@ -128,5 +137,5 @@ land; each is removed once its milestone's section above is filled in.
 - [x] Matrix Compute Engine detailed test list (M2) -- see `verif/cocotb_tb/matrix_engine/README.md`
 - [x] DMA Engine detailed test list (M3) -- see `verif/cocotb_tb/dma/README.md`
 - [x] Command Processor / Scheduler detailed test list (M4) -- see `verif/cocotb_tb/top/README.md`
-- [ ] PMU / Debug detailed test list (M5)
+- [x] PMU / Debug detailed test list (M5) -- see `verif/cocotb_tb/pmu/README.md` and `verif/cocotb_tb/debug/README.md`
 - [ ] Coverage closure report template (M6)

@@ -266,7 +266,14 @@ blocks:
       - name: TRACE_RDATA
         offset: 0x08
         access: RO
-        description: Pop the oldest trace entry (opcode/tag/status packed).
+        description: >
+          Pop the oldest trace entry. A read at this address dequeues the
+          trace FIFO; the popped opcode/tag/status is returned in this same
+          transaction's read data.
+        fields:
+          - {name: OPCODE, bits: "3:0", description: "cmd_opcode_e of the completed command"}
+          - {name: TAG, bits: "15:4", description: "caller tag of the completed command"}
+          - {name: STATUS, bits: "18:16", description: "cmd_status_e of the completed command"}
 
       - name: ERROR_CODE
         offset: 0x10

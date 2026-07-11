@@ -20,11 +20,17 @@ VERILOG_SOURCES := \
 	$(REPO_ROOT)/rtl/dma/tpe_dma.sv \
 	$(REPO_ROOT)/rtl/command_processor/tpe_cmd_proc.sv \
 	$(REPO_ROOT)/rtl/scheduler/tpe_scheduler.sv \
+	$(REPO_ROOT)/rtl/pmu/tpe_pmu.sv \
+	$(REPO_ROOT)/rtl/debug/tpe_debug.sv \
 	$(REPO_ROOT)/rtl/top/tpe_top.sv \
 	$(REPO_ROOT)/verif/models/axi4_ddr_model.sv \
 	$(REPO_ROOT)/verif/cocotb_tb/top/top_test_harness.sv \
 	$(REPO_ROOT)/verif/sva/cmd_proc_sva.sv \
-	$(REPO_ROOT)/verif/coverage/cmd_proc_cov.sv
+	$(REPO_ROOT)/verif/sva/pmu_sva.sv \
+	$(REPO_ROOT)/verif/sva/debug_sva.sv \
+	$(REPO_ROOT)/verif/coverage/cmd_proc_cov.sv \
+	$(REPO_ROOT)/verif/coverage/pmu_cov.sv \
+	$(REPO_ROOT)/verif/coverage/debug_cov.sv
 
 SIM_BUILD := sim_build
 

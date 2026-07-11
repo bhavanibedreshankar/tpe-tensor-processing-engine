@@ -11,12 +11,12 @@
 // verif/cocotb_tb/env/axi4_lite_agent.py drives it. One outstanding
 // transaction at a time (no pipelining), matching V1's overall scope.
 //
-// V1 implementation note: only the `cp` block is a real AXI4-Lite-visible
-// register bank. `dma`/`matrix_engine`'s entries in the register map YAML
-// document the full conceptual programmer's view; in this implementation
-// the Scheduler drives those blocks directly over plain control signals
-// rather than through a second layer of AXI4-Lite decoding (see
-// tpe_scheduler.sv). PMU/Debug (M5) will be real AXI4-Lite-visible blocks.
+// V1 implementation note: only `cp`, `pmu` (M5), and `debug` (M5) are real
+// AXI4-Lite-visible register banks -- see tpe_top.sv's host MMIO router.
+// `dma`/`matrix_engine`'s entries in the register map YAML document the
+// full conceptual programmer's view; in this implementation the Scheduler
+// drives those blocks directly over plain control signals rather than
+// through a second layer of AXI4-Lite decoding (see tpe_scheduler.sv).
 module tpe_cmd_proc
   import tpe_pkg::*;
   import tpe_regs_pkg::*;

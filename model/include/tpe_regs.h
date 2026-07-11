@@ -272,6 +272,15 @@ inline constexpr int DEBUG_TRACE_STATUS_TRACE_COUNT_LSB = 2;
 inline constexpr uint16_t DEBUG_TRACE_RDATA_ADDR = 0x4008;
 inline constexpr uint32_t DEBUG_TRACE_RDATA_RESET = 0x00000000u;
 
+inline constexpr uint32_t DEBUG_TRACE_RDATA_OPCODE_MASK = 0x0000000fu;
+inline constexpr int DEBUG_TRACE_RDATA_OPCODE_LSB = 0;
+
+inline constexpr uint32_t DEBUG_TRACE_RDATA_TAG_MASK = 0x0000fff0u;
+inline constexpr int DEBUG_TRACE_RDATA_TAG_LSB = 4;
+
+inline constexpr uint32_t DEBUG_TRACE_RDATA_STATUS_MASK = 0x00070000u;
+inline constexpr int DEBUG_TRACE_RDATA_STATUS_LSB = 16;
+
 
 inline constexpr uint16_t DEBUG_ERROR_CODE_ADDR = 0x4010;
 inline constexpr uint32_t DEBUG_ERROR_CODE_RESET = 0x00000000u;

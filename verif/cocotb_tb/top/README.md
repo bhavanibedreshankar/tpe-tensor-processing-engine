@@ -1,9 +1,10 @@
 # Top-level (end-to-end) testbench
 
 Verifies `rtl/top/tpe_top.sv` -- the real integration of everything built
-in M1-M3 (`rtl/command_processor/tpe_cmd_proc.sv` +
+in M1-M5 (`rtl/command_processor/tpe_cmd_proc.sv` +
 `rtl/scheduler/tpe_scheduler.sv` + `rtl/dma/tpe_dma.sv` +
-`rtl/matrix_engine/matrix_engine.sv`) behind the host-facing AXI4-Lite MMIO
+`rtl/matrix_engine/matrix_engine.sv` + `rtl/pmu/tpe_pmu.sv` +
+`rtl/debug/tpe_debug.sv`) behind the host-facing AXI4-Lite MMIO
 interface, wired to a behavioral DDR (`verif/models/axi4_ddr_model.sv`) by
 `top_test_harness.sv` (not RTL in its own right, see its header comment).
 This is the first testbench that drives the chip **the way real driver
@@ -36,11 +37,20 @@ at the default 16x16 array size).
   array's full width, not an out-of-range value).
 - `irq_independent_clear_test` -- directed: force both `CMD_DONE` and
   `CMD_ERROR` set, clear only `CMD_ERROR`, check `CMD_DONE` survives.
+- `pmu_debug_integration_test` (M5) -- proves the real host MMIO address
+  router in `tpe_top.sv` actually reaches PMU and Debug, not just Command
+  Processor: runs one OK and one bad-opcode command over the real AXI4-Lite
+  port, checks `PMU_CYCLE_COUNT` advanced and `DEBUG_TRACE_RDATA`/
+  `DEBUG_ERROR_CODE`/`DEBUG_ERROR_TAG` captured both completions correctly.
+  This is the one thing the standalone `verif/cocotb_tb/pmu/` and
+  `verif/cocotb_tb/debug/` testbenches can't exercise on their own, since
+  those drive PMU/Debug's event inputs directly rather than through a real
+  Scheduler + router.
 
 Run:
 ```
 make -C model               # build tpe_model first (or `make model` here)
-make                         # runs all five tests
+make                         # runs all six tests
 make waves
 ```
 

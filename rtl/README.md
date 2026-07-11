@@ -14,9 +14,9 @@ where practical to keep this tree pure RTL).
 | `dma/` | Descriptor-based DDR<->SRAM DMA engine | M3 | done (1 intentional bug, see bug catalog) |
 | `command_processor/` | AXI4-Lite MMIO, command decode/staging | M4 | done (1 intentional bug, see bug catalog) |
 | `scheduler/` | Sequential command dispatcher (V1 scope, see tpe_scheduler.sv) | M4 | done (1 intentional bug, see bug catalog) |
-| `pmu/` | Performance counters | M5 | pending |
-| `debug/` | Command trace buffer, error capture | M5 | pending |
-| `top/` | `tpe_top.sv` -- wires everything together | M4 | done |
+| `pmu/` | Performance counters | M5 | done (1 intentional bug, see bug catalog) |
+| `debug/` | Command trace buffer, error capture | M5 | done |
+| `top/` | `tpe_top.sv` -- wires everything together, incl. M5's host MMIO router | M4/M5 | done |
 
 `rtl/include/tpe_regs_pkg.sv` is **generated** from
 `docs/register_map/tpe_regs.yaml` -- do not hand-edit it; run `make regmap`.

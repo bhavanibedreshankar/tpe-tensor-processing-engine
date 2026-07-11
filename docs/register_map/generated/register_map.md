@@ -216,7 +216,7 @@ Debug infrastructure -- command trace buffer and error capture.
 |---|---|---|---|---|---|
 | `CTRL` | `0x00` | `0x4000` | RW | `0x00000000` |  |
 | `TRACE_STATUS` | `0x04` | `0x4004` | RO | `0x00000000` |  |
-| `TRACE_RDATA` | `0x08` | `0x4008` | RO | `0x00000000` | Pop the oldest trace entry (opcode/tag/status packed). |
+| `TRACE_RDATA` | `0x08` | `0x4008` | RO | `0x00000000` | Pop the oldest trace entry. A read at this address dequeues the trace FIFO; the popped opcode/tag/status is returned in this same transaction's read data. |
 | `ERROR_CODE` | `0x10` | `0x4010` | RO | `0x00000000` | cmd_status_e of the most recent error. |
 | `ERROR_TAG` | `0x14` | `0x4014` | RO | `0x00000000` | Command tag associated with ERROR_CODE. |
 
@@ -235,6 +235,15 @@ Debug infrastructure -- command trace buffer and error capture.
 | `TRACE_EMPTY` | `[0:0]` |  |
 | `TRACE_FULL` | `[1:1]` |  |
 | `TRACE_COUNT` | `[12:2]` |  |
+
+
+**TRACE_RDATA fields:**
+
+| Field | Bits | Description |
+|---|---|---|
+| `OPCODE` | `[3:0]` | cmd_opcode_e of the completed command |
+| `TAG` | `[15:4]` | caller tag of the completed command |
+| `STATUS` | `[18:16]` | cmd_status_e of the completed command |
 
 
 

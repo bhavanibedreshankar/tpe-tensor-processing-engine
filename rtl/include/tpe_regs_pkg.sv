@@ -300,6 +300,15 @@ package tpe_regs_pkg;
   localparam logic [15:0] DEBUG_TRACE_RDATA_OFFSET  = 16'h0008;
   localparam logic [31:0] DEBUG_TRACE_RDATA_RESET   = 32'h00000000;
 
+  localparam int DEBUG_TRACE_RDATA_OPCODE_MSB = 3;
+  localparam int DEBUG_TRACE_RDATA_OPCODE_LSB = 0;
+
+  localparam int DEBUG_TRACE_RDATA_TAG_MSB = 15;
+  localparam int DEBUG_TRACE_RDATA_TAG_LSB = 4;
+
+  localparam int DEBUG_TRACE_RDATA_STATUS_MSB = 18;
+  localparam int DEBUG_TRACE_RDATA_STATUS_LSB = 16;
+
 
   localparam logic [15:0] DEBUG_ERROR_CODE_ADDR    = 16'h4010;
   localparam logic [15:0] DEBUG_ERROR_CODE_OFFSET  = 16'h0010;

@@ -28,11 +28,22 @@ module tpe_scheduler
     input  logic          cmd_fifo_rd_valid,
     input  tpe_command_t  cmd_fifo_rd_data,
 
-    // Completion report to tpe_cmd_proc
+    // Completion report to tpe_cmd_proc (+ opcode, added M5 for tpe_debug's
+    // command trace buffer -- tpe_cmd_proc doesn't need it, only consumes
+    // tag/status)
     output logic          sched_done_valid,
     output logic [11:0]   sched_done_tag,
     output cmd_status_e   sched_done_status,
+    output cmd_opcode_e   sched_done_opcode,
     output logic          sched_busy,
+
+    // PMU instrumentation (M5) -- see the assigns near the bottom of this
+    // file for exact per-signal semantics (dispatch-active span, stall vs.
+    // idle classification).
+    output logic sched_dispatch_start,
+    output logic sched_stall,
+    output logic sched_idle,
+    output logic sched_dma_wait,
 
     // DMA control
     output logic [AXI_ADDR_WIDTH-1:0]  dma_desc_mem_addr,
@@ -180,6 +191,25 @@ module tpe_scheduler
   assign sched_done_valid  = (state_q == ST_COMPLETE);
   assign sched_done_tag    = cmd_q.tag;
   assign sched_done_status = status_q;
+  assign sched_done_opcode = cmd_q.opcode;
   assign sched_busy        = (state_q != ST_IDLE);
+
+  // ---- PMU instrumentation (M5) -------------------------------------------
+  // sched_dispatch_start: fires exactly once per command -- ST_DECODE only
+  // ever lasts a single cycle in this sequential dispatcher (state_d is
+  // computed combinationally off the command just latched into cmd_q), so
+  // testing the level is already a one-shot pulse, no edge-detect needed.
+  // A command's PMU-visible dispatch latency spans this cycle through the
+  // sched_done_valid cycle inclusive (ST_DECODE..ST_COMPLETE).
+  assign sched_dispatch_start = (state_q == ST_DECODE);
+  // sched_stall: queued work (or a pop already requested) that hasn't
+  // reached ST_DECODE yet -- the cycle(s) between "a command exists to run"
+  // and "it actually started running."
+  assign sched_stall          = (state_q == ST_IDLE && !cmd_fifo_empty) || (state_q == ST_POP);
+  // sched_idle: no command in flight and none queued.
+  assign sched_idle           = (state_q == ST_IDLE) && cmd_fifo_empty;
+  // sched_dma_wait: scheduler dispatched to the DMA engine and is waiting
+  // on its done pulse.
+  assign sched_dma_wait       = (state_q == ST_WAIT_DMA);
 
 endmodule

@@ -11,13 +11,13 @@ Columns: which test(s) are expected to fail, what the observable symptom is
 
 ## Status
 
-6 bugs injected: 3 in the Matrix Compute Engine (M2), 1 in the DMA Engine
-(M3), 2 in the Command Processor/Scheduler (M4). Each was chosen
-deliberately so the relevant block's sanity/golden-path test stays green --
-they only surface on narrower/nonzero/multi-burst/boundary/overflow paths
-that random and directed edge-case tests exercise, exactly as a real
-regression suite would catch them (a passing smoke test does not mean a
-clean design).
+7 bugs injected: 3 in the Matrix Compute Engine (M2), 1 in the DMA Engine
+(M3), 2 in the Command Processor/Scheduler (M4), 1 in the PMU (M5). Each was
+chosen deliberately so the relevant block's sanity/golden-path test stays
+green -- they only surface on narrower/nonzero/multi-burst/boundary/
+overflow/timing-sensitive paths that random and directed edge-case tests
+exercise, exactly as a real regression suite would catch them (a passing
+smoke test does not mean a clean design).
 
 | # | Block | File:Line | Symptom | Root cause | Caught by |
 |---|---|---|---|---|---|
@@ -27,8 +27,9 @@ clean design).
 | 4 | dma | `rtl/dma/tpe_dma.sv:161` | SRAM->DDR transfers whose length leaves exactly 1 beat for a trailing burst (e.g. 17 rows = one 16-beat burst + one 1-beat burst) silently drop that final row -- it's never written to DDR. Only affects the write (SRAM->DDR) direction; only affects transfers where `n_rows % MAX_BURST_BEATS == 1`. **The seeded `dma_random_test` in this repo happens not to roll that exact case** -- only the directed `dma_multiburst_write_test` (17 rows, SRAM->DDR) catches it reliably, which is itself worth noting: a green random regression is not proof of a clean design. | Off-by-one in the burst-continuation check: `beats_remaining_q <= BeatsWidth'(1)` should be `beats_remaining_q == BeatsWidth'(0)` -- at this point in the FSM all of the just-completed burst's beats are already accounted for, so "1 remaining" means one more (small) burst is still needed, not that the transfer is done. | `dma_multiburst_write_test` |
 | 5 | scheduler | `rtl/scheduler/tpe_scheduler.sv:84` | `CMD_MATMUL` with `dim_n == COLS` (the array's full physical width -- a legitimate, exactly-fitting tile, not an out-of-range one) is wrongly rejected with `STAT_BAD_DIM` instead of dispatched. `matmul_flow_test` uses `dim_n=5 < COLS`, so it never hits this boundary. | Off-by-one in the bounds check: `cmd_q.dim_n < TILE_DIM_WIDTH'(COLS)` should be `<=` -- `dim_n == COLS` means "use all COLS columns," which is in range, not one past it. | `matmul_full_width_test` (directed `dim_n == COLS`) |
 | 6 | cmd_proc | `rtl/command_processor/tpe_cmd_proc.sv:242` | Writing 1 to `IRQ_STATUS.CMD_ERROR` (bit 1) alone does nothing -- the bit never clears unless `CMD_DONE` (bit 0) is *also* being written 1 in the same access, and doing so clears both regardless of which the host intended. | Copy-paste-shaped bit-width bug: the write-1-to-clear mask is built from `s_wdata[0]` broadcast to both bits (`~{2{s_wdata[0]}}`) instead of using each bit's own `s_wdata` value (`~s_wdata[1:0]`). | `irq_independent_clear_test` (forces both bits set, clears `CMD_ERROR` alone, checks `CMD_DONE` survives) |
+| 7 | pmu | `rtl/pmu/tpe_pmu.sv` (the `if (cmd_done_valid)` branch capturing `cmd_latency_last_q`) | `PMU_CMD_LATENCY_LAST` reads exactly 1 cycle lower than the command's true dispatch-to-completion cycle count, every time, for every command. Invisible to any test that doesn't independently hand-derive the expected cycle count (which is why this is a PMU-only bug: `pmu_debug_integration_test` in the top-level suite only checks `CYCLE_COUNT > 0`, not an exact latency value). | Same-cycle nonblocking-assignment ordering: on the `cmd_done_valid` cycle, `latency_ctr_q`'s own completion-cycle increment (`latency_ctr_q <= latency_ctr_q + 1`) and `cmd_latency_last_q`'s capture (`cmd_latency_last_q <= latency_ctr_q`) both read the *old* (pre-increment) value of `latency_ctr_q` in the same cycle -- the capture should read `latency_ctr_q + 32'd1` to include the completion cycle itself. | `latency_test` (drives a synthetic dispatch window of a known N cycles, asserts `CMD_LATENCY_LAST == N`) |
 
 See `verif/cocotb_tb/matrix_engine/README.md`, `verif/cocotb_tb/dma/README.md`,
-and `verif/cocotb_tb/top/README.md` for the actual observed failure
-signatures (exact mismatch addresses/values) from running the suites with
-these bugs present.
+`verif/cocotb_tb/top/README.md`, and `verif/cocotb_tb/pmu/README.md` for the
+actual observed failure signatures (exact mismatch addresses/values) from
+running the suites with these bugs present.
