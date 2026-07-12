@@ -846,14 +846,12 @@ def _read_statuses(root: Path) -> list:
     return statuses
 
 
-def _print_monitor(root: Path):
+def _format_monitor(root: Path) -> str:
     statuses = _read_statuses(root)
     if not statuses:
-        print(f"run_sim -monitor: no tasks found under {root} (nothing has run yet)")
-        return
+        return f"run_sim -monitor: no tasks found under {root} (nothing has run yet)\n"
     statuses.sort(key=lambda s: s.get("start") or "")
-    print(f"{'STAGE':<12} {'SCOPE':<32} {'STATE':<9} {'DURATION':>9}  NOTES")
-    print("-" * 80)
+    lines = [f"{'STAGE':<12} {'SCOPE':<32} {'STATE':<9} {'DURATION':>9}  NOTES", "-" * 80]
     for s in statuses:
         stage = s.get("stage", "?")
         scope = s.get("scope", "?")
@@ -868,7 +866,12 @@ def _print_monitor(root: Path):
         else:
             dur_str = f"{s.get('duration_s', 0.0):>8.2f}s"
         note = "cached" if s.get("cached") else ""
-        print(f"{stage:<12} {scope:<32} {state:<9} {dur_str:>9}  {note}")
+        lines.append(f"{stage:<12} {scope:<32} {state:<9} {dur_str:>9}  {note}")
+    return "\n".join(lines) + "\n"
+
+
+def _print_monitor(root: Path):
+    print(_format_monitor(root), end="")
 
 
 def do_monitor(args) -> int:
@@ -892,17 +895,26 @@ def do_monitor(args) -> int:
     return 0
 
 
-def _monitor_background(root: Path, stop_event: threading.Event, interval: float = 1.0):
+def _monitor_background(root: Path, stop_event: threading.Event, out, interval: float = 1.0):
     """Runs in a daemon thread alongside a live -test/-suite run (started
     from main() when -monitor is combined with either): a single page,
     cleared and redrawn every `interval` seconds -- not a scrolling feed
     -- until `stop_event` is set once the run finishes. Per-task console
     lines (record_task) are suppressed for the run's duration (see
-    `_quiet_console`) so this page is the only thing moving."""
+    `_quiet_console`) so this page is the only thing moving.
+
+    Writes directly to `out` -- the real terminal stream, captured by
+    main() *before* console_log() re-points sys.stdout at the tee -- via
+    .write(), never print()/sys.stdout, so these ephemeral redraws never
+    land in console.log (which would otherwise balloon over a long run:
+    one full page every `interval` seconds for the run's whole duration).
+    console.log only gets the durable record: per-task lines (when this
+    isn't active) and the final SUMMARY."""
     while not stop_event.is_set():
-        print("\033[2J\033[H", end="")  # clear screen, home cursor
-        print(f"run_sim monitor -- {root}\n")
-        _print_monitor(root)
+        out.write("\033[2J\033[H")  # clear screen, home cursor
+        out.write(f"run_sim monitor -- {root}\n\n")
+        out.write(_format_monitor(root))
+        out.flush()
         stop_event.wait(interval)
 
 
@@ -989,8 +1001,12 @@ def main():
     if args.monitor:
         global _quiet_console
         _quiet_console = True  # the monitor page is the real-time view now
+        real_stdout = sys.stdout  # captured before console_log() re-points sys.stdout at
+                                  # the tee (inside run_suite/run_single_test below), so the
+                                  # monitor's redraws bypass console.log -- see that function
         monitor_thread = threading.Thread(
-            target=_monitor_background, args=(work_root(args), stop_event), daemon=True)
+            target=_monitor_background, args=(work_root(args), stop_event, real_stdout),
+            daemon=True)
         monitor_thread.start()
 
     try:

@@ -240,17 +240,26 @@ file's top few lines, not a separate calculation).
 
 ## 12. console.log
 
-Every `-test`/`-suite` run tees everything it prints -- its own
-`log.info`/`[stage]` lines, `tools/cov_merge.py`'s notices, the live
-`-monitor` page if enabled, the final `SUMMARY` block -- to
-`<tag>/console.log` (`-test`) or `<suite>/console.log` (`-suite`), in
-addition to the terminal, so it's still there after the terminal scrolls
-away or the session closes. `console_log()` (`tools/run_sim.py`)
-re-points the `run_sim`/`cov_merge`/`lint` loggers' `StreamHandler`s at
-the tee explicitly, not just `sys.stdout = tee` -- those loggers were
-already constructed (at import time, bound to the *original* stdout
-object) before any run starts, so a bare reassignment wouldn't have
-reached them.
+Every `-test`/`-suite` run tees everything durable it prints -- its own
+`log.info`/`[stage]` lines, `tools/cov_merge.py`'s notices, the final
+`SUMMARY` block -- to `<tag>/console.log` (`-test`) or
+`<suite>/console.log` (`-suite`), in addition to the terminal, so it's
+still there after the terminal scrolls away or the session closes.
+`console_log()` (`tools/run_sim.py`) re-points the `run_sim`/`cov_merge`/
+`lint` loggers' `StreamHandler`s at the tee explicitly, not just
+`sys.stdout = tee` -- those loggers were already constructed (at import
+time, bound to the *original* stdout object) before any run starts, so a
+bare reassignment wouldn't have reached them.
+
+**Deliberately not teed**: the live `-monitor` page's repeated
+clear-and-redraw (section 6) writes directly to the real terminal stream
+`main()` captures *before* `console_log()` swaps `sys.stdout` --
+`_monitor_background()` never calls `print()`/touches `sys.stdout` at
+all, so its redraws never reach the file. A page every second for a
+suite's whole duration would otherwise balloon console.log with
+thousands of near-duplicate snapshots; the file is meant to hold the
+durable record (what ran, cache hits, pass/fail, the final coverage
+score), not a replay of the live view.
 
 ## 13. A gotcha worth knowing if you extend this
 
