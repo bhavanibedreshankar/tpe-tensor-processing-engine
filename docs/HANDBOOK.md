@@ -12,6 +12,17 @@ make venv                              # create .venv/, install cocotb/pyuvm/etc
 source .venv/bin/activate              # activate venv manually (needed for any bare `make -C verif/...` call)
 ```
 
+## Environment
+
+```
+source env.sh                          # REPO_ROOT/WORK_DIR + venv activation + tool paths, in one shot
+```
+Sets `REPO_ROOT`, `WORK_DIR` (scratch dir for ad hoc test-result dumps,
+under the already-gitignored `sim/logs/`), activates `.venv` if present,
+and resolves `VERILATOR`/`IVERILOG`/`GTKWAVE` to their absolute paths.
+Replaces the manual `source .venv/bin/activate` above when you also want
+a scratch dir and resolved tool paths for one-off commands/scripts.
+
 ## Register map
 
 ```
