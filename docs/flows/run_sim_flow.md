@@ -107,6 +107,7 @@ $WORK_DIR/<work-dir-name, default "WORK">/
 │           ├── built_hash.txt      # hash this sim_build/ was last built from
 │           └── sim_build/          # the compiled Vtop binary -- shared/reused
 ├── <dir>.<test>[.seed<N>]/                 # one --test run
+│   ├── console.log                 # everything printed this run (see section 12)
 │   └── rtl_sim/
 │       ├── status.json
 │       ├── results.xml
@@ -120,6 +121,7 @@ $WORK_DIR/<work-dir-name, default "WORK">/
 │           ├── merged_coverage.dat
 │           └── coverage_summary.txt
 └── <suite>/                                # one --suite run
+    ├── console.log                         # everything printed this run
     ├── <dir>.<test>[.seed<N>]/rtl_sim/     # same per-test contents as above
     ├── regression.xml                      # aggregate JUnit
     └── coverage/                           # only if -coverage was passed, shared
@@ -236,7 +238,21 @@ written in full to `coverage_summary.txt` either way; the summary above
 is a condensed `line`/`toggle`/`branch`/`covergroup` reading of that same
 file's top few lines, not a separate calculation).
 
-## 11. A gotcha worth knowing if you extend this
+## 12. console.log
+
+Every `-test`/`-suite` run tees everything it prints -- its own
+`log.info`/`[stage]` lines, `tools/cov_merge.py`'s notices, the live
+`-monitor` page if enabled, the final `SUMMARY` block -- to
+`<tag>/console.log` (`-test`) or `<suite>/console.log` (`-suite`), in
+addition to the terminal, so it's still there after the terminal scrolls
+away or the session closes. `console_log()` (`tools/run_sim.py`)
+re-points the `run_sim`/`cov_merge`/`lint` loggers' `StreamHandler`s at
+the tee explicitly, not just `sys.stdout = tee` -- those loggers were
+already constructed (at import time, bound to the *original* stdout
+object) before any run starts, so a bare reassignment wouldn't have
+reached them.
+
+## 13. A gotcha worth knowing if you extend this
 
 `SIM_BUILD`, unlike `COCOTB_RESULTS_FILE`, can't be redirected via a plain
 environment variable when going through `make` -- every block's Makefile
@@ -250,3 +266,12 @@ override instead, which beats any in-Makefile assignment regardless of
 `make` at all (section 4) -- if you ever need to add a new block-Makefile
 variable to the `compile` stage specifically, use the same command-line
 override approach there.
+
+Separately, `tools/cov_merge.py`'s log lines used to assume its output
+always lives under `REPO_ROOT` (`path.relative_to(REPO_ROOT)`, for a
+tidy relative path in the log) -- that raises `ValueError` once `WORK_DIR`
+points outside the repo (an intentional, documented option, see
+`docs/HANDBOOK.md`'s "Environment" section), which `run_sim -coverage`
+hit immediately. Fixed with a `_display()` helper that falls back to the
+absolute path when `relative_to()` fails, used everywhere `cov_merge.py`
+had that pattern.

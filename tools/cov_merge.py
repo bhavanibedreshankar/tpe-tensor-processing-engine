@@ -32,6 +32,16 @@ from tools.common.logger import get_logger  # noqa: E402
 log = get_logger("cov_merge")
 
 
+def _display(p: Path) -> str:
+    """Repo-relative for a log line where possible; falls back to the
+    absolute path when `p` isn't under REPO_ROOT (e.g. WORK_DIR pointed
+    somewhere else entirely, see docs/HANDBOOK.md's "Environment")."""
+    try:
+        return str(p.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(p)
+
+
 def merge_verilator(cov_dir: Path, annotate: bool):
     dat_files = sorted(cov_dir.glob("*.dat"))
     if not dat_files:
@@ -52,7 +62,7 @@ def merge_verilator(cov_dir: Path, annotate: bool):
     )
     summary_path.write_text(proc.stdout)
     print(proc.stdout)
-    log.info(f"cov_merge: summary written to {summary_path.relative_to(REPO_ROOT)}")
+    log.info(f"cov_merge: summary written to {_display(summary_path)}")
 
     if annotate:
         annotate_dir = cov_dir.parent / "coverage_annotated"
@@ -60,7 +70,7 @@ def merge_verilator(cov_dir: Path, annotate: bool):
             ["verilator_coverage", "--annotate", str(annotate_dir), str(merged_path)],
             check=True,
         )
-        log.info(f"cov_merge: annotated source written under {annotate_dir.relative_to(REPO_ROOT)}")
+        log.info(f"cov_merge: annotated source written under {_display(annotate_dir)}")
 
 
 def _sum_bins(dst: ET.Element, src: ET.Element):
@@ -111,7 +121,7 @@ def merge_cocotb_coverage(cov_dir: Path):
     merged_path = cov_dir.parent / "cocotb_coverage_merged.xml"
     ET.ElementTree(merged).write(merged_path, xml_declaration=True, encoding="unicode")
     log.info(f"cov_merge: merged {len(xml_files)} cocotb-coverage file(s) -> "
-             f"{merged_path.relative_to(REPO_ROOT)} ({merged.get('cover_percentage')}% overall)")
+             f"{_display(merged_path)} ({merged.get('cover_percentage')}% overall)")
 
 
 def main():

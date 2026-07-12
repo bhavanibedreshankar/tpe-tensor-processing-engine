@@ -79,6 +79,7 @@ import contextlib
 import hashlib
 import io
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -154,6 +155,53 @@ def tag_for(dir_: str, test: str, seed) -> str:
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+class _Tee:
+    """Writes to every stream given (the real terminal plus a log file)."""
+
+    def __init__(self, *streams):
+        self.streams = streams
+
+    def write(self, data):
+        for s in self.streams:
+            s.write(data)
+
+    def flush(self):
+        for s in self.streams:
+            s.flush()
+
+    def isatty(self):
+        return False
+
+
+@contextlib.contextmanager
+def console_log(path: Path):
+    """Tees everything printed for the life of the `with` block -- this
+    process's own print()/log calls, and cov_merge's/regression's (their
+    loggers were already constructed at import time, bound to the
+    original stdout object, so `sys.stdout = tee` alone wouldn't reach
+    them -- their StreamHandlers are re-pointed at the tee explicitly
+    below) -- to both the terminal and `path`, saved under $WORK_DIR so a
+    run's console output survives after the terminal scrolls away."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    f = open(path, "w")
+    tee = _Tee(sys.stdout, f)
+    old_stdout = sys.stdout
+    sys.stdout = tee
+    patched = []
+    for name in ("run_sim", "cov_merge", "lint"):
+        for h in logging.getLogger(name).handlers:
+            if isinstance(h, logging.StreamHandler):
+                patched.append((h, h.stream))
+                h.setStream(tee)
+    try:
+        yield
+    finally:
+        sys.stdout = old_stdout
+        for h, orig_stream in patched:
+            h.setStream(orig_stream)
+        f.close()
 
 
 # ---------------------------------------------------------------------------
@@ -665,23 +713,27 @@ def run_single_test(args) -> int:
         return 2
 
     result_dir = work_root(args) / tag_for(entry["dir"], args.test, args.seed)
-    log.info(f"run_sim: test={args.test} dir={entry['dir']} kind={entry.get('kind')}"
-             + (f" seed={args.seed}" if args.seed is not None else "")
-             + f" -> {result_dir}")
+    console_log_path = result_dir / "console.log"
+    with console_log(console_log_path):
+        log.info(f"run_sim: test={args.test} dir={entry['dir']} kind={entry.get('kind')}"
+                 + (f" seed={args.seed}" if args.seed is not None else "")
+                 + f" -> {result_dir}")
 
-    r = run_test(entry["dir"], args.test, args.seed, result_dir, args.timeout, cache_root(args),
-                 keep_coverage=args.coverage, keep_waves=args.waves)
-    print(f"\n{r['tag']:<50} {r['status']:<8} {r['wall_s']:>8.2f}s")
-    print(f"log: {r['log']}")
-    if entry.get("expect_fail") and r["status"] == "FAIL":
-        print(f"note: FAIL expected -- see docs/verification/bug_list.md ({entry['expect_fail']})")
+        r = run_test(entry["dir"], args.test, args.seed, result_dir, args.timeout, cache_root(args),
+                     keep_coverage=args.coverage, keep_waves=args.waves)
+        print(f"\n{r['tag']:<50} {r['status']:<8} {r['wall_s']:>8.2f}s")
+        print(f"log: {r['log']}")
+        if entry.get("expect_fail") and r["status"] == "FAIL":
+            print(f"note: FAIL expected -- see docs/verification/bug_list.md ({entry['expect_fail']})")
 
-    coverage_result = report_coverage(result_dir / "coverage", args.annotate) if args.coverage else None
-    waves_opened = None
-    if args.waves and r["dump_vcd"] is not None and open_waves(r["dump_vcd"]):
-        waves_opened = r["dump_vcd"]
+        coverage_result = report_coverage(result_dir / "coverage", args.annotate) if args.coverage else None
+        waves_opened = None
+        if args.waves and r["dump_vcd"] is not None and open_waves(r["dump_vcd"]):
+            waves_opened = r["dump_vcd"]
 
-    print_final_summary(coverage_result, waves_opened)
+        print_final_summary(coverage_result, waves_opened)
+        print(f"\nconsole log: {console_log_path}")
+
     return 0 if r["status"] == "PASS" else 1
 
 
@@ -689,37 +741,40 @@ def run_suite(args) -> int:
     entries = load_testlist(args.suite)
     suite_root = work_root(args) / args.suite
     croot = cache_root(args)
+    console_log_path = suite_root / "console.log"
 
-    groups = defaultdict(list)
-    for e in entries:
-        groups[e["dir"]].append(e)
+    with console_log(console_log_path):
+        groups = defaultdict(list)
+        for e in entries:
+            groups[e["dir"]].append(e)
 
-    log.info(f"run_sim: suite={args.suite} tests={len(entries)} dirs={len(groups)} "
-             f"jobs={args.jobs} -> {suite_root}")
+        log.info(f"run_sim: suite={args.suite} tests={len(entries)} dirs={len(groups)} "
+                 f"jobs={args.jobs} -> {suite_root}")
 
-    start = time.time()
-    results = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as ex:
-        futures = {ex.submit(run_group, es, suite_root, args.timeout, croot, args.coverage): d
-                   for d, es in groups.items()}
-        for fut in concurrent.futures.as_completed(futures):
-            d = futures[fut]
-            try:
-                results.extend(fut.result())
-            except Exception as exc:
-                log.error(f"run_sim: worker for dir={d} crashed: {exc}")
-                results.append({"tag": f"{d}.<worker-crash>", "dir": d, "test": "?", "seed": None,
-                                 "status": "ERROR", "wall_s": 0.0, "cocotb_time_s": None,
-                                 "result_dir": suite_root, "log": "", "dump_vcd": None})
-    elapsed = time.time() - start
+        start = time.time()
+        results = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as ex:
+            futures = {ex.submit(run_group, es, suite_root, args.timeout, croot, args.coverage): d
+                       for d, es in groups.items()}
+            for fut in concurrent.futures.as_completed(futures):
+                d = futures[fut]
+                try:
+                    results.extend(fut.result())
+                except Exception as exc:
+                    log.error(f"run_sim: worker for dir={d} crashed: {exc}")
+                    results.append({"tag": f"{d}.<worker-crash>", "dir": d, "test": "?", "seed": None,
+                                     "status": "ERROR", "wall_s": 0.0, "cocotb_time_s": None,
+                                     "result_dir": suite_root, "log": "", "dump_vcd": None})
+        elapsed = time.time() - start
 
-    junit_path = suite_root / "regression.xml"
-    write_junit(results, junit_path, args.suite)
-    print_summary(results, args.suite, elapsed)
-    log.info(f"run_sim: JUnit written to {junit_path}")
+        junit_path = suite_root / "regression.xml"
+        write_junit(results, junit_path, args.suite)
+        print_summary(results, args.suite, elapsed)
+        log.info(f"run_sim: JUnit written to {junit_path}")
 
-    coverage_result = report_coverage(suite_root / "coverage", args.annotate) if args.coverage else None
-    print_final_summary(coverage_result)
+        coverage_result = report_coverage(suite_root / "coverage", args.annotate) if args.coverage else None
+        print_final_summary(coverage_result)
+        print(f"\nconsole log: {console_log_path}")
 
     infra_broken = any(r["status"] in ("ERROR", "TIMEOUT") for r in results)
     return 1 if infra_broken else 0
