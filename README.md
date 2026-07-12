@@ -15,25 +15,56 @@ for the RTL-facing spec this repo actually implements.
 **Everything here uses only free/open-source tools** -- no paid EDA
 licenses. See [Toolchain](#toolchain) below.
 
-## Status
+## Architecture overview
 
-All planned V1 milestones are complete:
+TPE is a memory-mapped coprocessor: a host writes commands to an
+AXI4-Lite register window, the Command Processor decodes and queues them,
+the Scheduler dispatches DMA and Matrix Engine work, results land back in
+DDR via DMA, and completion raises an interrupt.
 
-| Milestone | Scope | Status |
+```
+Host --AXI4-Lite MMIO--> Command Processor --> Scheduler --+--> DMA Engine ---AXI4---> DDR
+                              ^                             |         |
+                              |                             |         v
+                          Debug/PMU <--------events----------+   Local SRAM (scratchpad)
+                                                              |         ^
+                                                              v         |
+                                                        Matrix Compute Engine
+                                                     (MAC array + accumulator)
+```
+
+| Block | Directory | What it does |
 |---|---|---|
-| M0 | Foundation: repo skeleton, toolchain smoke test, shared RTL package + common lib, register map + generators, docs, build system | **done** |
-| M1 | Local SRAM scratchpad + reusable pyuvm verification pattern | **done** |
-| M2 | Matrix Compute Engine (systolic MAC array, GEMM) | **done** (3 intentional bugs present, see bug catalog) |
-| M3 | DMA Engine (AXI4, descriptor-based) | **done** (1 intentional bug present, see bug catalog) |
-| M4 | Command Processor + Scheduler + top-level integration | **done** (2 intentional bugs present, see bug catalog) |
-| M5 | Performance Monitor Unit + Debug infrastructure | **done** (1 intentional bug present, see bug catalog) |
-| M6 | Regression infrastructure (test generator, job scheduler, coverage merge, profiler, lint, CI) | **done** |
-| M7 | Bug catalog + full regression proof | **done** -- 7 bugs cataloged; `sanity`/`smoke`/`daily`/`random` all proven clean (zero infra errors) across 224 test invocations, see bug catalog's "M7 final regression proof" |
+| Command Processor | `rtl/command_processor/` | Front door -- AXI4-Lite MMIO slave; stages a command's opcode/tag/addresses/dims, enqueues it on `CMD_PUSH`, raises `CMD_DONE`/`CMD_ERROR` |
+| Scheduler | `rtl/scheduler/` | Pops queued commands and dispatches each to the DMA Engine or Matrix Engine (V1: sequential, one command runs to completion before the next starts) |
+| DMA Engine | `rtl/dma/` | Descriptor-based mover between DDR (AXI4 master) and the on-chip scratchpad, single channel |
+| Local SRAM | `rtl/sram/` | Dual-port 64 KB scratchpad (4096 x 128b rows); fully verified standalone, available for V2+ multi-consumer scheduling |
+| Matrix Compute Engine | `rtl/matrix_engine/` | Weight-stationary 16x16 systolic array (256 INT8 MACs), `C = A x B + C` over tiles up to 256 in M/K/N, INT32 saturating accumulator |
+| Performance Monitor Unit | `rtl/pmu/` | Free-running counters -- cycle count, MAC-active/DMA-wait/scheduler-stall/idle cycles, last-command latency |
+| Debug | `rtl/debug/` | Command trace buffer (opcode/tag/status per completed command) plus latched last-error code/tag |
 
-RTL, C++ golden model, verification environment, and regression/CI
-tooling are all complete for V1. See the [Roadmap](docs/architecture/tpe_architecture_spec.md#6-roadmap)
-for V2+ scope (activation unit, quantization, multi-channel DMA, improved
-scheduler, and beyond).
+**Numeric format**: INT8 operands (`OPERAND_WIDTH`), INT32 accumulator
+(`ACCUM_WIDTH`), both defined in `rtl/include/tpe_pkg.sv` alongside every
+other architectural parameter.
+
+**Software command flow** (host's-eye view of one matmul):
+```
+1. Host DMA's weights:      stage CMD_LOAD_WEIGHT + addrs -> CMD_PUSH
+2. Host DMA's activations:  stage CMD_LOAD_ACT + addrs    -> CMD_PUSH
+3. Host issues matmul:      stage CMD_MATMUL + dims        -> CMD_PUSH
+4. Host stores result:      stage CMD_STORE + addrs         -> CMD_PUSH
+5. Host waits for CMD_DONE interrupt (or polls CP_STATUS.BUSY)
+```
+Verified end-to-end over the real AXI4-Lite MMIO interface in
+`verif/cocotb_tb/top/test_top.py`'s `matmul_flow_test` -- no backdoor RTL
+access except to the external DDR model.
+
+Full detail (register map, exact interface widths, AXI4-Lite host-MMIO
+router, V1 simplifications and why) is in
+[`docs/architecture/tpe_architecture_spec.md`](docs/architecture/tpe_architecture_spec.md);
+V2+ scope (activation unit, quantization, multi-channel DMA, improved
+scheduler) is in that doc's
+[Roadmap](docs/architecture/tpe_architecture_spec.md#6-roadmap).
 
 ## Toolchain
 
@@ -56,25 +87,96 @@ make venv        # creates .venv/, installs cocotb/pyuvm/cocotb-coverage/etc fro
 
 Note: [Verible](https://github.com/chipsalliance/verible) was planned as
 the SV linter/formatter but is no longer distributed via Homebrew in this
-environment; `verilator --lint-only` is used instead (see `make lint`).
+environment; `verilator --lint-only` is used instead (see
+[Linting](#linting) below).
 
-## Quick start
+## Getting started
 
 ```
-make venv              # set up the Python virtualenv
-make regmap             # generate SV/C++/Markdown from the register map YAML
-make lint                # lint all RTL (tools/lint.py)
-make toolchain-smoke     # prove cocotb+pyuvm+Verilator+coverage+waveform all work
-make sanity              # ~6 tests, one golden-path test per block
-make smoke               # ~18 tests, cross-block + directed error/boundary paths
-make daily               # 100 tests: directed + seeded-random
-make random              # 100 seeded-random tests
+make venv       # set up the Python virtualenv
+make regmap     # generate SV/C++/Markdown from the register map YAML
+make model      # build the C++ golden-model CLI + run its unit tests
+make lint       # lint all RTL
+make sanity     # ~6 tests, one golden-path test per block -- proves the chain works
 ```
 
-`make help` lists every available target. See
-[Regression flow](docs/flows/regression_flow.md) for what a "clean" run
-looks like (some `FAIL`s are expected -- they're the catalogued bugs, see
-below) and how to reproduce/profile/merge-coverage for any run.
+`make help` lists every available target.
+
+## Verification & testing
+
+Methodology in full: [`docs/verification/test_plan.md`](docs/verification/test_plan.md)
+(per-tier sizing, coverage goals, bug-injection policy) and
+[`docs/verification/coverage_plan.md`](docs/verification/coverage_plan.md)
+(how coverage is modeled). Day-to-day usage in full:
+[`docs/flows/regression_flow.md`](docs/flows/regression_flow.md) and
+[`docs/flows/build_flow.md`](docs/flows/build_flow.md).
+
+### Linting
+```
+make lint                 # tools/lint.py -- every rtl/ block, source list + waivers in one place
+```
+
+### Running a single test
+Every block has its own cocotb testbench under `verif/cocotb_tb/<block>/`.
+Run one test directly while developing/debugging:
+```
+TESTCASE=matmul_sanity_test make -C verif/cocotb_tb/matrix_engine
+TESTCASE=dma_random_test TPE_SEED=12345 make -C verif/cocotb_tb/dma   # reproducible seed
+make -C verif/cocotb_tb/<block> waves                                  # open the last run in GTKWave
+```
+The full test catalog (every test, tagged sanity/directed/random/error/
+integration) is [`verif/testlists/standalone.yaml`](verif/testlists/standalone.yaml).
+Or per-block shortcuts from the top level: `make sim-sram`,
+`make sim-matrix-engine`, `make sim-dma`, `make sim-top`, `make sim-pmu`,
+`make sim-debug`.
+
+### Regression tiers
+```
+make sanity     # ~6 tests, seconds       -- one golden-path test per block
+make smoke      # ~18 tests, ~1 min       -- cross-block + directed error/boundary paths
+make daily      # 100 tests, ~2 min       -- directed + seeded-random, tools/gen_tests.py-generated
+make random     # 100 tests, ~2 min       -- pure seeded-random sweep
+```
+All four run through `tools/regression.py` (the local parallel job-
+scheduler / farm replacement -- jobs run across block directories, JUnit
+XML + JSON results written to `sim/logs/<suite>/`). **Some `FAIL`s are
+expected** on `smoke`/`daily`/`random`: this repo ships 7 intentionally
+injected bugs (see [Bug catalog](#bug-catalog-intentional-bugs) below) and
+the tests are supposed to catch them -- the run's exit code only goes
+nonzero on an actual infrastructure error (`ERROR`/`TIMEOUT`), never on a
+catalogued `FAIL`. Reproduce any specific failure bit-for-bit with the
+`TESTCASE=... TPE_SEED=...` form above.
+
+### Coverage
+```
+make cov-merge SUITE=smoke     # tools/cov_merge.py -- merges coverage.dat via verilator_coverage,
+                                 # plus TB-side cocotb-coverage XML where sampled
+```
+Writes `sim/logs/<suite>/merged_coverage.dat` and a text summary
+(line/toggle/branch, plus every RTL-side functional/FSM SystemVerilog
+covergroup).
+
+### Profiling
+```
+make profile SUITE=daily       # tools/profiler.py -- slowest tests + per-directory outlier flags
+```
+
+### Waveforms
+```
+python3 tools/waves.py dma     # opens that block's last sim's dump.vcd in GTKWave
+```
+
+### Bug catalog (intentional bugs)
+The RTL contains 7 deliberately injected bugs (starting at the Matrix
+Compute Engine) so the verification environment has something real to
+catch -- each documented with file:line, root cause, symptom, and exactly
+which test catches it in
+[`docs/verification/bug_list.md`](docs/verification/bug_list.md). The
+build/regression *infrastructure* is expected to run cleanly end-to-end at
+all times; a test **failing** because of a catalogued bug is the intended
+outcome, not a broken repo -- and a regression with *fewer* failures than
+expected is itself the red flag (it means a bug got accidentally fixed, or
+a test stopped exercising it).
 
 ## Repository layout
 
@@ -101,12 +203,3 @@ Makefile         top-level entry point; wraps everything above
 - [Build flow](docs/flows/build_flow.md)
 - [Regression flow](docs/flows/regression_flow.md)
 - [CI/CD flow](docs/flows/ci_flow.md)
-
-## Design note: intentional bugs
-
-Per the project's original goals, the RTL in this repo contains
-deliberately injected bugs (starting at M2) so the verification environment
-has something real to catch. The build/regression *infrastructure* is
-expected to run cleanly end-to-end at all times; specific test **results**
-failing because of a real, catalogued bug is the intended outcome, not a
-broken repo. See [`docs/verification/bug_list.md`](docs/verification/bug_list.md).
