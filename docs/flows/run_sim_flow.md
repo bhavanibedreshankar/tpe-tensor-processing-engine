@@ -40,27 +40,32 @@ make venv          # first time only
 $WORK_DIR/<work-dir-name, default "WORK">/
 ├── <dir>.<test>[.seed<N>]/            # one --test run
 │   ├── sim_build/                     # this run's Verilator build
+│   │   └── coverage.dat               # always produced (every block Makefile hardcodes
+│   │                                  # --coverage-line/-toggle/-user, see section 8) but left
+│   │                                  # buried here unless -coverage was passed
 │   ├── results.xml                    # cocotb JUnit for this test
 │   ├── dump.vcd
-│   ├── coverage.dat
 │   ├── run.log                        # full make stdout/stderr
 │   ├── <dir>_scoreboard_work/         # swept out of the source tree
-│   └── coverage/                      # only if -coverage was passed
+│   └── coverage/                      # only created if -coverage was passed
+│       ├── coverage.dat               # copy of sim_build/coverage.dat, surfaced at top level
 │       ├── <tag>.dat
 │       ├── merged_coverage.dat
 │       └── coverage_summary.txt
 └── <suite>/                           # one --suite run
     ├── <dir>.<test>[.seed<N>]/        # same per-test contents as above
     ├── regression.xml                 # aggregate JUnit
-    └── coverage/                      # shared across every test in the suite
-        ├── <tag>.dat
+    └── coverage/                      # only created if -coverage was passed, shared
+        ├── <tag>.dat                  # across every test in the suite
         ├── merged_coverage.dat
         └── coverage_summary.txt
 ```
 
 `<tag>` is `"<dir>.<test>"`, plus `.seed<N>` when a seed is set -- same
 naming convention `tools/regression.py` uses under `sim/logs/<suite>/`.
-Nothing under `verif/cocotb_tb/` is ever written to.
+Nothing under `verif/cocotb_tb/` is ever written to, and nothing
+coverage-related shows up above `sim_build/` unless `-coverage` is passed
+-- see section 8.
 
 ## 4. Options
 
@@ -124,7 +129,24 @@ interface doesn't need to change if a real scheduler gets wired in later
 (`tools/run_sim.py`) for a submission call and everything upstream
 (test resolution, work-dir layout, coverage merge) stays the same.
 
-## 8. A gotcha worth knowing if you extend this
+## 8. Why `-coverage` doesn't fully suppress coverage.dat
+
+Every block Makefile hardcodes `--coverage-line --coverage-toggle
+--coverage-user` ([`build_flow.md`](build_flow.md) section 4) at compile
+time, so Verilator always instruments and writes a `coverage.dat`
+regardless of whether you asked for it -- `run_sim` doesn't control that,
+only where the file lands. Without `-coverage`, it's redirected into
+`sim_build/coverage.dat` (an already-expected build-scratch location) and
+otherwise ignored: no top-level `coverage.dat`, no `coverage/` dir, no
+merge/report. With `-coverage`, it's redirected to the top level of the
+result dir instead, and copied into `coverage/<tag>.dat` for
+`tools/cov_merge.py` to merge/summarize. Same story for sram's TB-side
+`sram_coverage.xml` (produced unconditionally by
+`verif/cocotb_tb/sram/coverage.py`, swept out of the source tree either
+way -- kept under `coverage/` only when `-coverage` is passed, discarded
+otherwise).
+
+## 9. A gotcha worth knowing if you extend this
 
 `SIM_BUILD`, unlike `COCOTB_RESULTS_FILE`/`SIM_ARGS`/`PLUSARGS`, can't be
 redirected via an environment variable -- every block's Makefile has

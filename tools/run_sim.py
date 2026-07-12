@@ -98,27 +98,31 @@ def tag_for(dir_: str, test: str, seed) -> str:
     return f"{dir_}.{test}" + (f".seed{seed}" if seed is not None else "")
 
 
-def sweep_generated(block_dir: Path, result_dir: Path, cov_root: Path, tag: str):
+def sweep_generated(block_dir: Path, result_dir: Path, cov_root: Path, tag: str, keep_coverage: bool):
     """Moves/copies the artifacts a test writes at hardcoded relative
     paths inside block_dir -- can't be redirected via make/env vars, see
     scoreboard.py's `Path("<block>_scoreboard_work")` and sram's
     `Path("sram_coverage.xml")` -- into result_dir/cov_root, then removes
-    them from the source tree so it's clean again."""
+    them from the source tree so it's clean again. The TB-side coverage
+    XML is only kept (copied into cov_root) when `-coverage` was actually
+    requested; otherwise it's discarded, same as coverage.dat below."""
     for p in sorted(block_dir.glob("*_scoreboard_work")):
         dest = result_dir / p.name
         if dest.exists():
             shutil.rmtree(dest)
         shutil.move(str(p), str(dest))
     for p in sorted(block_dir.glob("*_coverage.xml")):
-        cov_root.mkdir(parents=True, exist_ok=True)
-        shutil.copy(p, cov_root / f"{tag}.cocotb_coverage.xml")
+        if keep_coverage:
+            cov_root.mkdir(parents=True, exist_ok=True)
+            shutil.copy(p, cov_root / f"{tag}.cocotb_coverage.xml")
         p.unlink()
     pycache = block_dir / "__pycache__"
     if pycache.exists():
         shutil.rmtree(pycache)
 
 
-def run_one(dir_: str, test: str, seed, result_dir: Path, timeout_s: int, cov_root: Path = None) -> dict:
+def run_one(dir_: str, test: str, seed, result_dir: Path, timeout_s: int,
+            cov_root: Path = None, keep_coverage: bool = False) -> dict:
     block_dir = REPO_ROOT / "verif" / "cocotb_tb" / dir_
     tag = tag_for(dir_, test, seed)
     result_dir.mkdir(parents=True, exist_ok=True)
@@ -126,8 +130,15 @@ def run_one(dir_: str, test: str, seed, result_dir: Path, timeout_s: int, cov_ro
 
     results_xml = result_dir / "results.xml"
     dump_vcd = result_dir / "dump.vcd"
-    coverage_dat = result_dir / "coverage.dat"
     log_file = result_dir / "run.log"
+    # Every block Makefile hardcodes --coverage-line/-toggle/-user (see
+    # docs/flows/build_flow.md section 4), so Verilator always instruments
+    # and writes a coverage.dat regardless of -coverage -- run_sim can only
+    # choose where it lands, not whether it's produced. Without -coverage,
+    # tuck it inside sim_build (an already-expected build-scratch dir) so
+    # nothing coverage-related shows up in result_dir unless asked for.
+    coverage_dat = (result_dir / "coverage.dat") if keep_coverage \
+        else (result_dir / "sim_build" / "coverage.dat")
 
     # Passed as `make VAR=value` command-line overrides, not env vars: every
     # block Makefile sets `SIM_BUILD := sim_build` (a hard assignment, see
@@ -158,9 +169,9 @@ def run_one(dir_: str, test: str, seed, result_dir: Path, timeout_s: int, cov_ro
     wall_s = time.time() - start
     log_file.write_text(stdout)
 
-    sweep_generated(block_dir, result_dir, cov_root, tag)
+    sweep_generated(block_dir, result_dir, cov_root, tag, keep_coverage)
 
-    if coverage_dat.exists():
+    if keep_coverage and coverage_dat.exists():
         cov_root.mkdir(parents=True, exist_ok=True)
         shutil.copy(coverage_dat, cov_root / f"{tag}.dat")
 
@@ -176,13 +187,14 @@ def run_one(dir_: str, test: str, seed, result_dir: Path, timeout_s: int, cov_ro
     }
 
 
-def run_group(entries: list, suite_root: Path, timeout_s: int) -> list:
+def run_group(entries: list, suite_root: Path, timeout_s: int, keep_coverage: bool) -> list:
     cov_root = suite_root / "coverage"
     out = []
     for e in entries:
         seed = e.get("seed")
         tag = tag_for(e["dir"], e["test"], seed)
-        out.append(run_one(e["dir"], e["test"], seed, suite_root / tag, timeout_s, cov_root=cov_root))
+        out.append(run_one(e["dir"], e["test"], seed, suite_root / tag, timeout_s,
+                            cov_root=cov_root, keep_coverage=keep_coverage))
     return out
 
 
@@ -251,7 +263,7 @@ def run_single_test(args) -> int:
              + (f" seed={args.seed}" if args.seed is not None else "")
              + f" -> {result_dir}")
 
-    r = run_one(entry["dir"], args.test, args.seed, result_dir, args.timeout)
+    r = run_one(entry["dir"], args.test, args.seed, result_dir, args.timeout, keep_coverage=args.coverage)
     print(f"\n{r['tag']:<50} {r['status']:<8} {r['wall_s']:>8.2f}s")
     print(f"log: {r['log']}")
     if entry.get("expect_fail") and r["status"] == "FAIL":
@@ -279,7 +291,8 @@ def run_suite(args) -> int:
     start = time.time()
     results = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as ex:
-        futures = {ex.submit(run_group, es, suite_root, args.timeout): d for d, es in groups.items()}
+        futures = {ex.submit(run_group, es, suite_root, args.timeout, args.coverage): d
+                   for d, es in groups.items()}
         for fut in concurrent.futures.as_completed(futures):
             d = futures[fut]
             try:
