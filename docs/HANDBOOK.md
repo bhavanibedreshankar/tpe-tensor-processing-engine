@@ -25,6 +25,9 @@ a scratch dir and resolved tool paths for one-off commands/scripts.
 
 ## run_sim (unified test orchestration)
 
+Full options reference + directory layout + examples:
+[`docs/flows/run_sim_flow.md`](flows/run_sim_flow.md).
+
 ```
 ./run_sim -test <test>                            # resolves the block dir itself, no -C needed
 ./run_sim -test <test> -seed <seed>                # reproducible seed (random-kind tests only)

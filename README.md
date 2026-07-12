@@ -203,4 +203,5 @@ Makefile         top-level entry point; wraps everything above
 - [Bug catalog](docs/verification/bug_list.md) -- intentionally injected RTL bugs and what catches them
 - [Build flow](docs/flows/build_flow.md)
 - [Regression flow](docs/flows/regression_flow.md)
+- [run_sim flow](docs/flows/run_sim_flow.md) -- unified test orchestrator (options reference + examples)
 - [CI/CD flow](docs/flows/ci_flow.md)
