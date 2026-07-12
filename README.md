@@ -1,5 +1,9 @@
 # TPE -- Tensor Processing Engine
 
+**[→ Interactive project overview](https://bhavanibedreshankar.github.io/tpe-tensor-processing-engine/)**
+-- a visual, no-chip-background-required walkthrough of what this chip
+does and how a command flows through it.
+
 A from-scratch, production-flow-style ASIC/RTL project: a small TPU-like
 matrix-multiply accelerator plus a full open-source verification
 environment (C++ golden model, pyuvm/cocotb testbenches, SVA assertions,
