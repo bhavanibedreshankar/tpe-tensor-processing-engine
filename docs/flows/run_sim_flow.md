@@ -230,6 +230,17 @@ Coverage:
 ============================================================
 ```
 
+Every `FAIL`/`ERROR` also carries a **failure signature** -- the last
+`SomeError: message`-shaped line pulled out of that test's raw
+`rtl_sim/run.log` (`_failure_signature()`, `tools/run_sim.py`; cocotb's
+own `results.xml` failure message is just a generic
+`"Test failed with RANDOM_SEED=..."`, no detail). It shows up everywhere
+a `FAIL`/`ERROR` does: the `-suite` results table's `FAILURE SIGNATURE`
+column, `-monitor`'s `NOTES / FAILURE SIGNATURE` column, a single
+`-test`'s own `failure: ...` line, and the JUnit `message=` attribute.
+Truncated to 80 chars for table display; `run.log` always has the
+untruncated text.
+
 `-coverage` itself only prints three short notices --
 `coverage: started`, `coverage: processing...`, `coverage: done` (or the
 actual error, if `tools/cov_merge.py` raises one) -- swallowing

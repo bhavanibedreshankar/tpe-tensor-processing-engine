@@ -81,6 +81,7 @@ import io
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -434,6 +435,26 @@ def get_libpython() -> str:
     return _libpython_loc
 
 
+_TRACEBACK_LINE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_.]*(?:Error|Exception)):\s*(.+?)\s*$",
+                             re.MULTILINE)
+
+
+def _failure_signature(log_text: str, max_len: int = 80) -> str:
+    """Pulls "<ExceptionType>: <message>" out of a FAIL/ERROR test's raw
+    run.log for the monitor/summary tables -- cocotb's own results.xml
+    failure message is a generic "Test failed with RANDOM_SEED=..." with
+    no detail, the actual assertion text only appears in the console
+    output/traceback. Takes the *last* match (Python's own traceback
+    rendering puts the actually-raised exception last), truncated for
+    table display -- the full run.log always has the untruncated text."""
+    matches = _TRACEBACK_LINE.findall(log_text)
+    if not matches:
+        return ""
+    exc_type, message = matches[-1]
+    sig = f"{exc_type}: {message}"
+    return sig if len(sig) <= max_len else sig[: max_len - 1] + "…"
+
+
 def run_rtl_sim(dir_: str, test: str, seed, result_dir: Path, sim_build: Path, filelist: dict,
                  timeout_s: int, cov_root: Path = None, keep_coverage: bool = False,
                  keep_waves: bool = False) -> dict:
@@ -514,12 +535,14 @@ def run_rtl_sim(dir_: str, test: str, seed, result_dir: Path, sim_build: Path, f
     else:
         status, cocotb_time_s = parse_results_xml(results_xml, test)
 
-    write_status(task_dir, state=status, duration_s=wall_s, end=_now())
-    record_task("rtl_sim", tag, status, wall_s)
+    signature = _failure_signature(stdout) if status in ("FAIL", "ERROR") else ""
+
+    write_status(task_dir, state=status, duration_s=wall_s, signature=signature, end=_now())
+    record_task("rtl_sim", tag, status, wall_s, note=signature)
 
     return {
         "tag": tag, "dir": dir_, "test": test, "seed": seed, "status": status,
-        "wall_s": wall_s, "cocotb_time_s": cocotb_time_s,
+        "wall_s": wall_s, "cocotb_time_s": cocotb_time_s, "signature": signature,
         "result_dir": result_dir, "log": log_file, "dump_vcd": dump_vcd,
     }
 
@@ -542,8 +565,8 @@ def run_test(dir_: str, test: str, seed, result_dir: Path, timeout_s: int, croot
                   f"{croot / dir_ / 'compile' / 'build.log'}")
         return {"tag": tag, "dir": dir_, "test": test, "seed": seed, "status": "ERROR",
                 "wall_s": compile_result["duration_s"], "cocotb_time_s": None,
-                "result_dir": result_dir, "log": croot / dir_ / "compile" / "build.log",
-                "dump_vcd": None}
+                "signature": "compile failed", "result_dir": result_dir,
+                "log": croot / dir_ / "compile" / "build.log", "dump_vcd": None}
 
     return run_rtl_sim(dir_, test, seed, result_dir, compile_result["sim_build"], filelist,
                         timeout_s, cov_root=cov_root, keep_coverage=keep_coverage,
@@ -567,10 +590,13 @@ def write_junit(results: list, path: Path, suite: str):
                        errors=str(sum(r["status"] in ("ERROR", "TIMEOUT") for r in results)))
     for r in results:
         tc = ET.SubElement(root, "testcase", classname=r["dir"], name=r["tag"], time=str(r["wall_s"]))
+        sig = r.get("signature") or ""
         if r["status"] == "FAIL":
-            ET.SubElement(tc, "failure", message=f"{r['tag']} failed (see {r['log']})")
+            ET.SubElement(tc, "failure", message=f"{r['tag']} failed{': ' + sig if sig else ''} "
+                                                  f"(see {r['log']})")
         elif r["status"] in ("ERROR", "TIMEOUT"):
-            ET.SubElement(tc, "error", message=f"{r['tag']} {r['status']} (see {r['log']})")
+            ET.SubElement(tc, "error", message=f"{r['tag']} {r['status']}"
+                                                f"{': ' + sig if sig else ''} (see {r['log']})")
     path.parent.mkdir(parents=True, exist_ok=True)
     ET.ElementTree(root).write(path, xml_declaration=True, encoding="unicode")
 
@@ -580,11 +606,11 @@ def print_summary(results: list, suite: str, elapsed_s: float):
     for r in results:
         counts[r["status"]] += 1
     print()
-    print(f"{'TAG':<55} {'STATUS':<8} {'WALL(s)':>8}")
-    print("-" * 75)
+    print(f"{'TAG':<45} {'STATUS':<8} {'WALL(s)':>8}  FAILURE SIGNATURE")
+    print("-" * 100)
     for r in sorted(results, key=lambda r: r["tag"]):
-        print(f"{r['tag']:<55} {r['status']:<8} {r['wall_s']:>8.2f}")
-    print("-" * 75)
+        print(f"{r['tag']:<45} {r['status']:<8} {r['wall_s']:>8.2f}  {r.get('signature') or ''}")
+    print("-" * 100)
     print(f"suite={suite} total={len(results)} "
           + " ".join(f"{k}={v}" for k, v in sorted(counts.items()))
           + f" wall={elapsed_s:.1f}s")
@@ -722,6 +748,8 @@ def run_single_test(args) -> int:
         r = run_test(entry["dir"], args.test, args.seed, result_dir, args.timeout, cache_root(args),
                      keep_coverage=args.coverage, keep_waves=args.waves)
         print(f"\n{r['tag']:<50} {r['status']:<8} {r['wall_s']:>8.2f}s")
+        if r.get("signature"):
+            print(f"failure: {r['signature']}")
         print(f"log: {r['log']}")
         if entry.get("expect_fail") and r["status"] == "FAIL":
             print(f"note: FAIL expected -- see docs/verification/bug_list.md ({entry['expect_fail']})")
@@ -851,7 +879,8 @@ def _format_monitor(root: Path) -> str:
     if not statuses:
         return f"run_sim -monitor: no tasks found under {root} (nothing has run yet)\n"
     statuses.sort(key=lambda s: s.get("start") or "")
-    lines = [f"{'STAGE':<12} {'SCOPE':<32} {'STATE':<9} {'DURATION':>9}  NOTES", "-" * 80]
+    lines = [f"{'STAGE':<12} {'SCOPE':<32} {'STATE':<9} {'DURATION':>9}  NOTES / FAILURE SIGNATURE",
+             "-" * 110]
     for s in statuses:
         stage = s.get("stage", "?")
         scope = s.get("scope", "?")
@@ -865,7 +894,7 @@ def _format_monitor(root: Path) -> str:
             dur_str = f"{duration:>8.1f}s"
         else:
             dur_str = f"{s.get('duration_s', 0.0):>8.2f}s"
-        note = "cached" if s.get("cached") else ""
+        note = "cached" if s.get("cached") else (s.get("signature") or "")
         lines.append(f"{stage:<12} {scope:<32} {state:<9} {dur_str:>9}  {note}")
     return "\n".join(lines) + "\n"
 
