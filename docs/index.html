@@ -258,7 +258,21 @@
   .diagram-section { background: var(--bg-panel-3); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
   .diagram-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; margin-top: 14px; }
 
+  .diagram-howto {
+    margin-top: 18px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .diagram-howto strong { color: var(--text); font-weight: 600; }
+
   .run-btn {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
     font-family: var(--mono);
     font-size: 13px;
     background: var(--bg-panel);
@@ -271,77 +285,114 @@
     align-items: center;
     gap: 10px;
     transition: border-color .15s, color .15s;
+    flex: none;
   }
   .run-btn:hover { border-color: var(--accent); color: var(--accent); }
   .run-btn .play { color: var(--accent); }
 
-  .diagram-stage {
+  /* the flow itself: a row of numbered cards joined by visible arrows,
+     always legible on its own -- interactivity (click / Run) only adds
+     detail on top of a diagram that already tells the whole story. */
+  .flow {
     margin-top: 40px;
     overflow-x: auto;
-    padding-bottom: 8px;
+    padding-bottom: 10px;
   }
-  .diagram-canvas {
-    position: relative;
-    width: 1050px;
-    margin: 0 auto;
-    height: 560px;
+  .flow-row {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    min-width: 880px;
   }
-  svg.wires { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-  svg.wires path {
-    fill: none;
-    stroke: var(--border-bright);
-    stroke-width: 1.5;
-    transition: stroke .25s, stroke-width .25s, filter .25s;
+  .flow-arrow {
+    flex: none;
+    width: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-dim);
+    font-size: 20px;
+    transition: color .2s;
   }
-  svg.wires path.lit {
-    stroke: var(--accent);
-    stroke-width: 2.25;
-    filter: drop-shadow(0 0 5px rgba(var(--accent-rgb), .7));
-  }
-  svg.wires path.pulse {
-    stroke-dasharray: 6 8;
-    animation: dash 0.7s linear infinite;
-  }
-  @keyframes dash { to { stroke-dashoffset: -14; } }
+  .flow-arrow.lit { color: var(--accent); text-shadow: 0 0 8px rgba(var(--accent-rgb), .7); }
 
-  .node {
-    position: absolute;
+  .card {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+    flex: 1 1 0;
     background: var(--bg-panel);
     border: 1px solid var(--border-bright);
     border-radius: var(--radius);
-    padding: 14px 16px;
+    padding: 18px 18px 20px;
     cursor: pointer;
-    width: 168px;
+    text-align: left;
+    font: inherit;
+    color: inherit;
     transition: border-color .2s, box-shadow .2s, transform .15s, background .2s;
-    user-select: none;
   }
-  .node:hover { transform: translateY(-2px); border-color: var(--accent-dim); }
-  .node .node-label {
+  .card:hover { transform: translateY(-2px); border-color: var(--accent-dim); }
+  .card .card-num {
     font-family: var(--mono);
-    font-size: 10.5px;
+    font-size: 11px;
     letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-dim);
+    color: var(--accent);
+    border: 1px solid var(--accent-dim);
+    border-radius: var(--radius);
+    display: inline-block;
+    padding: 2px 7px;
   }
-  .node .node-title { font-weight: 700; font-size: 14.5px; margin-top: 4px; }
-  .node.active {
+  .card .card-title { font-weight: 700; font-size: 15.5px; margin: 12px 0 0; }
+  .card .card-desc { font-size: 13px; color: var(--text-muted); margin: 6px 0 0; line-height: 1.5; }
+  .card.active {
     border-color: var(--accent);
     background: var(--bg-panel-2);
-    box-shadow: 0 0 0 1px var(--accent), 0 0 24px rgba(var(--accent-rgb), .25);
+    box-shadow: 0 0 0 1px var(--accent), 0 0 24px rgba(var(--accent-rgb), .22);
   }
-  .node.active .node-label { color: var(--accent); }
-  .node.selected { border-color: var(--accent); }
-  .node.watch { border-style: dashed; }
-  .node.watch.active { border-style: solid; border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber), 0 0 24px rgba(var(--amber-rgb), .3); }
-  .node.watch.active .node-label { color: var(--amber); }
+  .card.active .card-num { background: var(--accent); color: #04211a; }
 
-  .n-host      { left: 0;    top: 250px; }
-  .n-cp        { left: 200px; top: 250px; }
-  .n-sched     { left: 400px; top: 250px; }
-  .n-dma       { left: 620px; top: 90px; }
-  .n-mem       { left: 850px; top: 90px; }
-  .n-me        { left: 620px; top: 410px; }
-  .n-mon       { left: 400px; top: 60px; width: 168px; }
+  .flow-branch {
+    display: flex;
+    justify-content: center;
+    margin-top: -1px;
+  }
+  .branch-tag {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--text-dim);
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 var(--radius) var(--radius);
+    padding: 6px 14px;
+    cursor: pointer;
+    transition: color .2s, border-color .2s;
+  }
+  .branch-tag:hover, .branch-tag.active { color: var(--accent); border-color: var(--accent-dim); }
+  .branch-tag.active { color: var(--amber); border-color: var(--amber); }
+
+  .watch-strip {
+    margin-top: 20px;
+    min-width: 880px;
+    background: var(--bg-panel);
+    border: 1px dashed var(--border-bright);
+    border-radius: var(--radius);
+    padding: 12px 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-muted);
+    transition: border-color .2s, color .2s, background .2s;
+  }
+  .watch-strip:hover { border-color: var(--amber); }
+  .watch-strip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); flex: none; transition: background .2s, box-shadow .2s; }
+  .watch-strip.active { border-style: solid; border-color: var(--amber); background: var(--bg-panel-2); color: var(--text); }
+  .watch-strip.active .dot { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
 
   .diagram-caption {
     margin-top: 28px;
@@ -368,7 +419,7 @@
   .diagram-caption p { margin: 0; color: var(--text-muted); font-size: 14.5px; }
   .diagram-caption p strong { color: var(--text); font-weight: 600; }
 
-  .step-dots { display: flex; gap: 8px; margin-top: 18px; }
+  .step-dots { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
   .step-dot {
     font-family: var(--mono);
     font-size: 11px;
@@ -380,14 +431,6 @@
     cursor: pointer;
   }
   .step-dot.active { color: var(--accent); border-color: var(--accent); }
-
-  .node-info {
-    margin-top: 28px;
-    font-size: 14px;
-    color: var(--text-muted);
-    max-width: 68ch;
-  }
-  .node-info strong { color: var(--text); }
 
   /* ---------- trust / verification ---------- */
   .trust-grid {
@@ -542,69 +585,64 @@
   <div class="wrap-wide">
     <div class="diagram-head">
       <div>
-        <div class="eyebrow">INTERACTIVE</div>
-        <h2 class="section-title">Follow a command through the chip</h2>
+        <div class="eyebrow">BLOCK DIAGRAM</div>
+        <h2 class="section-title">Here's the whole trip, start to finish</h2>
         <p class="section-lede">
-          Click any block to read what it does, or press play and watch one real
-          command — <strong style="color:var(--text)">multiply two matrices and store the result</strong>
-          — move through the chip exactly like it does in simulation.
+          One command — <strong style="color:var(--text)">multiply two matrices and store the
+          result</strong> — passes through five stages, always in this order. Read it
+          left to right below, or press play to watch it happen.
         </p>
       </div>
-      <button class="run-btn" id="runBtn"><span class="play">▶</span> Run a command</button>
+      <button class="run-btn" id="runBtn"><span class="play">▶</span> Animate it</button>
     </div>
+    <p class="diagram-howto">↳ <strong>Click any card</strong> for what it does, or press <strong>Animate it</strong> to watch the command move.</p>
 
-    <div class="diagram-stage">
-      <div class="diagram-canvas" id="canvas">
-        <svg class="wires" id="wires">
-          <path id="w-host-cp" d="M168,272 L200,272" />
-          <path id="w-cp-sched" d="M368,272 L400,272" />
-          <path id="w-sched-dma" d="M484,250 C484,190 560,150 620,130" />
-          <path id="w-dma-mem" d="M788,130 L850,130" />
-          <path id="w-sched-me" d="M484,294 C484,360 560,400 620,440" />
-          <path id="w-me-dma" d="M700,410 C740,350 740,220 700,150" />
-          <path id="w-sched-mon" d="M484,250 C484,190 484,160 484,122" />
-          <path id="w-mon-dma" d="M568,90 C590,90 600,95 620,102" />
-        </svg>
-
-        <div class="node" id="n-host" data-node="host" tabindex="0" role="button" aria-pressed="false">
-          <div class="node-label">01 · SOFTWARE</div>
-          <div class="node-title">Host</div>
-        </div>
-        <div class="node" id="n-cp" data-node="cp" tabindex="0" role="button" aria-pressed="false">
-          <div class="node-label">02 · FRONT DOOR</div>
-          <div class="node-title">Command Processor</div>
-        </div>
-        <div class="node" id="n-sched" data-node="sched" tabindex="0" role="button" aria-pressed="false">
-          <div class="node-label">03 · TRAFFIC CONTROL</div>
-          <div class="node-title">Scheduler</div>
-        </div>
-        <div class="node" id="n-dma" data-node="dma" tabindex="0" role="button" aria-pressed="false">
-          <div class="node-label">04 · DATA MOVER</div>
-          <div class="node-title">DMA Engine</div>
-        </div>
-        <div class="node" id="n-mem" data-node="mem" tabindex="0" role="button" aria-pressed="false">
-          <div class="node-label">05 · OFF-CHIP</div>
-          <div class="node-title">DRAM</div>
-        </div>
-        <div class="node" id="n-me" data-node="me" tabindex="0" role="button" aria-pressed="false">
-          <div class="node-label">06 · COMPUTE</div>
-          <div class="node-title">Matrix Engine</div>
-        </div>
-        <div class="node watch" id="n-mon" data-node="mon" tabindex="0" role="button" aria-pressed="false">
-          <div class="node-label">07 · ALWAYS WATCHING</div>
-          <div class="node-title">PMU + Debug</div>
-        </div>
+    <div class="flow">
+      <div class="flow-row" id="flowRow">
+        <button class="card" id="c-host" data-node="host" type="button" aria-pressed="false">
+          <span class="card-num">1</span>
+          <div class="card-title">Host</div>
+          <div class="card-desc">Software asks for one thing: multiply A × B, store the result.</div>
+        </button>
+        <span class="flow-arrow" data-arrow="host-cp">→</span>
+        <button class="card" id="c-cp" data-node="cp" type="button" aria-pressed="false">
+          <span class="card-num">2</span>
+          <div class="card-title">Command Processor</div>
+          <div class="card-desc">The chip's front door — checks the request and queues it.</div>
+        </button>
+        <span class="flow-arrow" data-arrow="cp-sched">→</span>
+        <button class="card" id="c-sched" data-node="sched" type="button" aria-pressed="false">
+          <span class="card-num">3</span>
+          <div class="card-title">Scheduler</div>
+          <div class="card-desc">Fetches the data, then hands the math to the compute grid.</div>
+        </button>
+        <span class="flow-arrow" data-arrow="sched-me">→</span>
+        <button class="card" id="c-me" data-node="me" type="button" aria-pressed="false">
+          <span class="card-num">4</span>
+          <div class="card-title">Matrix Engine</div>
+          <div class="card-desc">256 tiny calculators multiply the two grids, all at once.</div>
+        </button>
+        <span class="flow-arrow" data-arrow="me-host">→</span>
+        <button class="card" id="c-done" data-node="done" type="button" aria-pressed="false">
+          <span class="card-num">5</span>
+          <div class="card-title">Done</div>
+          <div class="card-desc">Result is back in memory; the chip taps the host on the shoulder.</div>
+        </button>
+      </div>
+      <div class="flow-branch">
+        <button class="branch-tag" id="tag-dma" data-node="dma" type="button" aria-pressed="false">↑ moves data via the DMA engine ⇄ off-chip DRAM</button>
+      </div>
+      <div class="watch-strip" id="watchStrip" data-node="mon" role="button" tabindex="0" aria-pressed="false">
+        <span class="dot"></span> PMU + Debug — counting cycles and recording every one of these steps, the whole time.
       </div>
     </div>
 
     <div class="diagram-caption">
       <span class="step-tag" id="stepTag">IDLE</span>
-      <p id="stepText">Click a block above to learn what it does, or press <strong>Run a command</strong> to watch data move through the whole chip.</p>
+      <p id="stepText">Click any card above, or press <strong>Animate it</strong> to see this sequence run.</p>
     </div>
 
     <div class="step-dots" id="stepDots"></div>
-
-    <p class="node-info" id="nodeInfo"></p>
   </div>
 </section>
 
@@ -789,66 +827,74 @@
 
   /* ---------------- diagram data ---------------- */
   var NODE_INFO = {
-    host: "The <strong>host</strong> is ordinary software — a driver or test program — running on a CPU somewhere near the chip. It never touches memory or math directly; it just writes commands into a small register window and waits for an interrupt.",
-    cp: "The <strong>Command Processor</strong> is the chip's front door. It receives commands over a simple memory-mapped interface (AXI4-Lite), checks that they make sense, and queues them up for execution.",
-    sched: "The <strong>Scheduler</strong> pulls one command at a time off the queue and routes it to whichever engine needs to run it — the DMA engine for moving data, or the compute engine for math.",
-    dma: "The <strong>DMA Engine</strong> moves data in and out of off-chip memory in efficient bursts, without the host CPU babysitting every byte — the same technique used to keep any accelerator from being bottlenecked on memory bandwidth.",
-    mem: "<strong>DRAM</strong> is off-chip memory — plentiful but comparatively slow to reach. Weights, activations, and results all live here between operations; the chip only pulls in the slice it needs for the tile it's currently computing.",
-    me: "The <strong>Matrix Compute Engine</strong> is 256 multiply-accumulate units arranged in a 16×16 grid. Data flows in from two edges and every unit does one multiply-and-add per cycle, all 256 of them at once — this is what actually does the math.",
-    mon: "The <strong>Performance Monitor and Debug block</strong> watches silently: it counts cycles, tracks how long each command took, and keeps a trace of the last several commands and any errors — the chip's own flight recorder."
+    host: "Ordinary software — a driver or test program — running on a CPU near the chip. It never touches memory or math directly; it writes a command into a small register window, then waits.",
+    cp: "The chip's front door. It receives the command over a simple memory-mapped interface (AXI4-Lite), checks that it makes sense, and adds it to a queue.",
+    sched: "Pulls one command off the queue and routes it — dispatching the DMA engine when data needs to move, or the compute grid when it's time to do math.",
+    me: "256 multiply-accumulate units arranged in a 16×16 grid. Data flows in from two edges and every unit does one multiply-and-add per cycle, all 256 at once — this is what actually does the math.",
+    done: "The Command Processor raises an interrupt; the host reads a status register and finds the result already sitting in memory.",
+    dma: "The DMA engine moves data to and from off-chip DRAM in efficient bursts, without the host babysitting every byte — used twice per command: once to fetch weights/activations in, once to write the result back out.",
+    mon: "The Performance Monitor and Debug block watches silently the entire time: counting cycles, timing every command, and keeping a trace of what happened if something goes wrong — the chip's own flight recorder."
   };
 
   var STEPS = [
     {
       tag: "1 · LOAD WEIGHTS",
       text: "The host tells the chip where the weight matrix lives in DRAM. The Scheduler dispatches the DMA engine, which streams it in over efficient memory bursts.",
-      lit: ["w-host-cp", "w-cp-sched", "w-sched-dma", "w-dma-mem"],
-      active: ["host", "cp", "sched", "dma", "mem"]
+      cards: ["host", "cp", "sched"],
+      arrows: ["host-cp", "cp-sched"],
+      branch: true
     },
     {
       tag: "2 · LOAD ACTIVATIONS",
       text: "Same path, same mechanism — this time for the activation matrix, the actual input data about to be multiplied.",
-      lit: ["w-host-cp", "w-cp-sched", "w-sched-dma", "w-dma-mem"],
-      active: ["host", "cp", "sched", "dma", "mem"]
+      cards: ["host", "cp", "sched"],
+      arrows: ["host-cp", "cp-sched"],
+      branch: true
     },
     {
       tag: "3 · MULTIPLY",
-      text: "The Scheduler starts the Matrix Compute Engine. 256 multiply-accumulate units, wired in a 16×16 grid, compute the product in lockstep — this is the systolic array.",
-      lit: ["w-sched-me"],
-      active: ["sched", "me"]
+      text: "The Scheduler starts the Matrix Engine. 256 multiply-accumulate units, wired in a 16×16 grid, compute the product in lockstep — this is the systolic array.",
+      cards: ["sched", "me"],
+      arrows: ["sched-me"],
+      branch: false
     },
     {
       tag: "4 · STORE RESULT",
       text: "The result streams back out through the DMA engine to DRAM — the same path data came in on, just running the other direction.",
-      lit: ["w-me-dma", "w-dma-mem", "w-sched-dma"],
-      active: ["me", "dma", "mem", "sched"]
+      cards: ["me", "sched"],
+      arrows: ["sched-me"],
+      branch: true
     },
     {
       tag: "5 · DONE",
-      text: "The Command Processor raises an interrupt; the host reads back a status register. The whole time, the Scheduler was reporting every step to PMU + Debug, which recorded how long each one took.",
-      lit: ["w-host-cp", "w-sched-mon"],
-      active: ["cp", "host", "mon", "sched"]
+      text: "The Command Processor raises an interrupt; the host reads back a status register. PMU + Debug recorded how long every step above took.",
+      cards: ["me", "done"],
+      arrows: ["me-host"],
+      branch: false
     }
   ];
 
-  var nodes = {};
-  ["host", "cp", "sched", "dma", "mem", "me", "mon"].forEach(function (id) {
-    nodes[id] = document.getElementById("n-" + id);
+  var cards = {};
+  Array.prototype.forEach.call(document.querySelectorAll(".card"), function (el) {
+    cards[el.id.replace("c-", "")] = el;
   });
-  var wires = {};
-  Array.prototype.forEach.call(document.querySelectorAll("svg.wires path"), function (p) {
-    wires[p.id] = p;
+  var arrows = {};
+  Array.prototype.forEach.call(document.querySelectorAll(".flow-arrow"), function (el) {
+    arrows[el.getAttribute("data-arrow")] = el;
   });
+  var branchTag = document.getElementById("tag-dma");
+  var watchStrip = document.getElementById("watchStrip");
 
   var stepTag = document.getElementById("stepTag");
   var stepText = document.getElementById("stepText");
-  var nodeInfo = document.getElementById("nodeInfo");
   var stepDotsEl = document.getElementById("stepDots");
   var runBtn = document.getElementById("runBtn");
 
   function clearAll() {
-    Object.keys(nodes).forEach(function (k) { nodes[k].classList.remove("active"); });
-    Object.keys(wires).forEach(function (k) { wires[k].classList.remove("lit", "pulse"); });
+    Object.keys(cards).forEach(function (k) { cards[k].classList.remove("active"); cards[k].setAttribute("aria-pressed", "false"); });
+    Object.keys(arrows).forEach(function (k) { arrows[k].classList.remove("lit"); });
+    branchTag.classList.remove("active");
+    watchStrip.classList.remove("active");
   }
 
   function showStep(i) {
@@ -856,8 +902,10 @@
     var s = STEPS[i];
     stepTag.textContent = s.tag;
     stepText.innerHTML = s.text;
-    s.active.forEach(function (id) { if (nodes[id]) nodes[id].classList.add("active"); });
-    s.lit.forEach(function (id) { if (wires[id]) wires[id].classList.add("lit", "pulse"); });
+    s.cards.forEach(function (id) { if (cards[id]) { cards[id].classList.add("active"); cards[id].setAttribute("aria-pressed", "true"); } });
+    s.arrows.forEach(function (id) { if (arrows[id]) arrows[id].classList.add("lit"); });
+    if (s.branch) branchTag.classList.add("active");
+    watchStrip.classList.add("active");
     Array.prototype.forEach.call(stepDotsEl.children, function (d, idx) {
       d.classList.toggle("active", idx === i);
     });
@@ -872,10 +920,16 @@
     stepDotsEl.appendChild(dot);
   });
 
+  function resetCaption() {
+    stepTag.textContent = "IDLE";
+    stepText.textContent = "Click any card above, or press Animate it to see this sequence run.";
+    Array.prototype.forEach.call(stepDotsEl.children, function (d) { d.classList.remove("active"); });
+  }
+
   var playing = null, playIndex = 0;
   function stopPlay() {
     if (playing) { clearInterval(playing); playing = null; }
-    runBtn.innerHTML = '<span class="play">▶</span> Run a command';
+    runBtn.innerHTML = '<span class="play">▶</span> Animate it';
   }
   function startPlay() {
     playIndex = 0;
@@ -891,26 +945,30 @@
     }, 2200);
   }
   runBtn.addEventListener("click", function () {
-    if (playing) { stopPlay(); clearAll(); stepTag.textContent = "IDLE"; stepText.textContent = "Click a block above to learn what it does, or press Run a command to watch data move through the whole chip."; Array.prototype.forEach.call(stepDotsEl.children, function (d) { d.classList.remove("active"); }); }
+    if (playing) { stopPlay(); clearAll(); resetCaption(); }
     else startPlay();
   });
 
-  function selectNode(id) {
+  function selectNode(key, label) {
     stopPlay();
     clearAll();
-    nodes[id].classList.add("active");
-    nodeInfo.innerHTML = NODE_INFO[id];
-    stepTag.textContent = nodes[id].querySelector(".node-title").textContent.toUpperCase();
-    stepText.innerHTML = NODE_INFO[id];
+    if (cards[key]) { cards[key].classList.add("active"); cards[key].setAttribute("aria-pressed", "true"); }
+    if (key === "dma") branchTag.classList.add("active");
+    if (key === "mon") watchStrip.classList.add("active");
+    stepTag.textContent = label.toUpperCase();
+    stepText.innerHTML = NODE_INFO[key];
   }
-  Object.keys(nodes).forEach(function (id) {
-    nodes[id].addEventListener("click", function () { selectNode(id); });
-    nodes[id].addEventListener("keydown", function (e) {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectNode(id); }
+
+  Array.prototype.forEach.call(document.querySelectorAll("[data-node]"), function (el) {
+    var key = el.getAttribute("data-node");
+    var label = el.classList.contains("card")
+      ? el.querySelector(".card-title").textContent
+      : (key === "dma" ? "DMA + DRAM" : "PMU + Debug");
+    el.addEventListener("click", function () { selectNode(key, label); });
+    el.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectNode(key, label); }
     });
   });
-
-  nodeInfo.innerHTML = "Select any block to see its role, or press <strong>Run a command</strong> above to watch a full load → multiply → store sequence.";
 })();
 </script>
 
