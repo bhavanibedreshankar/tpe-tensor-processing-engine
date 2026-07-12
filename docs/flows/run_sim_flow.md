@@ -155,8 +155,8 @@ Every option accepts both a single- and double-dash spelling
 | `-block NAME` | With `-lint`, lint only that block. With `-clean`, remove only that block's `_cache/` entry (forces its next compile to rebuild for real). |
 | `-waves` | Keep this run's `dump.vcd` and open it in GTKWave afterward. Requires `-test` (ambiguous which test's waves to open for a `-suite`). |
 | `-clean` | Removes work dirs under `$WORK_DIR/<work-dir-name>`. Scope with `-test NAME` (that test's dir only), `-suite NAME` (that suite's whole subtree), or `-block NAME` (just that block's compile cache); with none of those, wipes everything under the work-dir-name root, including `_cache/`. |
-| `-monitor` | Prints the state (`RUNNING`/`PASS`/`FAIL`/`DONE`/`ERROR`/`TIMEOUT`), duration, and cached-or-not of every stage's `status.json` found under the work root, then exits. |
-| `-watch` | With `-monitor`, re-polls every 2s (Ctrl-C to stop) instead of a single snapshot -- run it in a second terminal alongside a live `-test`/`-suite` run to watch stages progress. |
+| `-monitor` | Combined with `-test`/`-suite`: live-prints every stage's state (`RUNNING`/`PASS`/`FAIL`/`DONE`/`ERROR`/`TIMEOUT`), duration, and cached-or-not every 2s, interleaved with that run's own output, until it finishes (then prints a final snapshot). Standalone (no `-test`/`-suite`): prints the last run's final status and exits. |
+| `-watch` | With a *standalone* `-monitor` (no `-test`/`-suite`), keep re-polling every 2s (Ctrl-C to stop) instead of a single snapshot -- e.g. from a second terminal, watching a `-test`/`-suite` run in a first one. |
 | `-list` | Prints every test in `verif/testlists/standalone.yaml` (name, block dir, kind, `expect_fail`) and exits. |
 | `-work-dir-name NAME` | Overrides the top-level dir name under `$WORK_DIR` (default `WORK`). |
 
@@ -169,8 +169,9 @@ Every option accepts both a single- and double-dash spelling
 ./run_sim -suite smoke -jobs 8 -coverage -annotate
 ./run_sim -suite daily -farm
 ./run_sim -lint -block tpe_dma
-./run_sim -monitor                                      # snapshot of every stage's last state
-./run_sim -monitor -watch                               # live, in a second terminal
+./run_sim -suite smoke -monitor -coverage               # live-watch this run's own stages
+./run_sim -monitor                                      # standalone: snapshot of the last run
+./run_sim -monitor -watch                               # standalone: live, from a second terminal
 ./run_sim -clean -suite smoke
 ./run_sim -clean -block dma                             # force dma's next compile to rebuild
 ./run_sim -clean                                        # wipe every work dir, including _cache/

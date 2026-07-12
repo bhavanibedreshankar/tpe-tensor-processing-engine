@@ -711,6 +711,11 @@ def _print_monitor(root: Path):
 
 
 def do_monitor(args) -> int:
+    """Standalone `-monitor` (no -test/-suite in this same invocation): a
+    snapshot of whatever the last run left behind, or -- with -watch -- a
+    full-screen live-refreshing view of it. See _monitor_background()
+    for the combined `-monitor -test/-suite` case, which live-monitors
+    the run this same process is driving."""
     root = work_root(args)
     if not args.watch:
         _print_monitor(root)
@@ -724,6 +729,18 @@ def do_monitor(args) -> int:
     except KeyboardInterrupt:
         print()
     return 0
+
+
+def _monitor_background(root: Path, stop_event: threading.Event, interval: float = 2.0):
+    """Runs in a daemon thread alongside a live -test/-suite run (started
+    from main() when -monitor is combined with either), printing a
+    periodic snapshot -- appended, not screen-clearing, since the run
+    itself is also printing stage-completion lines to the same terminal
+    -- until `stop_event` is set once the run finishes."""
+    while not stop_event.is_set():
+        print(f"\n--- run_sim monitor -- {_now()} ---")
+        _print_monitor(root)
+        stop_event.wait(interval)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -758,11 +775,14 @@ def build_parser() -> argparse.ArgumentParser:
                      help="remove work dirs under WORK_DIR/<work-dir-name> "
                           "(scope with --test/--suite/--block, or everything if none given)")
     ap.add_argument("-monitor", "--monitor", dest="monitor", action="store_true",
-                     help="print the status of every task (filelist/model_build/compile/rtl_sim) "
-                          "found under the work root and exit")
+                     help="combined with --test/--suite: live-print every task's status "
+                          "(filelist/model_build/compile/rtl_sim) every 2s until that run "
+                          "completes. Standalone (no --test/--suite): print the last run's "
+                          "final status and exit -- add --watch to keep re-polling that instead")
     ap.add_argument("-watch", "--watch", dest="watch", action="store_true",
-                     help="with --monitor, keep re-polling every 2s (Ctrl-C to stop) -- run in a "
-                          "second terminal alongside a live --test/--suite run")
+                     help="with a standalone --monitor (no --test/--suite), keep re-polling "
+                          "every 2s (Ctrl-C to stop) instead of a single snapshot -- e.g. from a "
+                          "second terminal watching a --test/--suite run in a first one")
     ap.add_argument("-list", "--list", dest="list_tests", action="store_true",
                      help="list every test in verif/testlists/standalone.yaml and exit")
     ap.add_argument("-work-dir-name", "--work-dir-name", dest="work_dir_name", default="WORK",
@@ -777,10 +797,14 @@ def main():
         sys.exit(do_list(args))
     if args.lint:
         sys.exit(do_lint(args))
-    if args.monitor:
-        sys.exit(do_monitor(args))
     if args.clean:
         sys.exit(do_clean(args))
+
+    # Standalone -monitor (no -test/-suite in this invocation): just report
+    # on whatever's already on disk and exit. Combined with -test/-suite,
+    # -monitor instead live-watches *this* run below.
+    if args.monitor and not (args.test or args.suite):
+        sys.exit(do_monitor(args))
 
     if args.test and args.suite:
         log.error("run_sim: --test and --suite are mutually exclusive")
@@ -797,9 +821,23 @@ def main():
         log.info("run_sim: --farm requested -- running locally in parallel "
                   "(no remote scheduler configured yet)")
 
-    if args.suite:
-        sys.exit(run_suite(args))
-    sys.exit(run_single_test(args))
+    monitor_thread = None
+    stop_event = threading.Event()
+    if args.monitor:
+        monitor_thread = threading.Thread(
+            target=_monitor_background, args=(work_root(args), stop_event), daemon=True)
+        monitor_thread.start()
+
+    try:
+        rc = run_suite(args) if args.suite else run_single_test(args)
+    finally:
+        if monitor_thread:
+            stop_event.set()
+            monitor_thread.join(timeout=5)
+            print("\n--- run_sim monitor: final status ---")
+            _print_monitor(work_root(args))
+
+    sys.exit(rc)
 
 
 if __name__ == "__main__":
