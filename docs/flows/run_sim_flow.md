@@ -14,7 +14,7 @@ is required; `run_sim` just orchestrates it.
 `results.xml`, `dump.vcd`, `coverage.dat`, `<dir>_scoreboard_work/` and
 `__pycache__` straight into that block's source directory, and fully
 recompiles the Verilator binary on every single invocation regardless of
-whether any RTL changed (see section 8). `run_sim` fixes both: every
+whether any RTL changed (see section 4). `run_sim` fixes both: every
 generated file lands under `$WORK_DIR` instead of the source tree, and a
 block's compiled binary is built once and reused by every test that
 targets it.
@@ -148,14 +148,14 @@ Every option accepts both a single- and double-dash spelling
 | `-seed N` | `TPE_SEED` override, only meaningful with `-test` on a `kind: random` entry. Suite entries carry their own per-test seed from the testlist YAML -- `-seed` doesn't apply there. |
 | `-jobs N` | Max concurrent block directories for `-suite` (default: `nproc`). Tests within the same block directory always run sequentially -- see [`regression_flow.md`](regression_flow.md) section 2 for why. |
 | `-timeout N` | Per-test timeout in seconds (default 120). |
-| `-farm` | Runs the same local parallel execution as a plain `-suite` run; today this is a naming placeholder only (no remote scheduler wired up), see section 8. |
-| `-coverage` | Keep this run's `coverage.dat` and merge/report it via `tools/cov_merge.py` (imported directly, not subprocessed) -- works with `-test` or `-suite`. |
+| `-farm` | Runs the same local parallel execution as a plain `-suite` run; today this is a naming placeholder only (no remote scheduler wired up), see section 9. |
+| `-coverage` | Keep this run's `coverage.dat`, merge/report it via `tools/cov_merge.py` (imported directly, its own verbose per-hierarchy dump swallowed -- see section 10) -- works with `-test` or `-suite`. |
 | `-annotate` | With `-coverage`, also write a per-source annotated report (`verilator_coverage --annotate`). |
 | `-lint` | Runs `tools/lint.py` (`verilator --lint-only` across `rtl/`). Independent of `-test`/`-suite`. |
 | `-block NAME` | With `-lint`, lint only that block. With `-clean`, remove only that block's `_cache/` entry (forces its next compile to rebuild for real). |
 | `-waves` | Keep this run's `dump.vcd` and open it in GTKWave afterward. Requires `-test` (ambiguous which test's waves to open for a `-suite`). |
 | `-clean` | Removes work dirs under `$WORK_DIR/<work-dir-name>`. Scope with `-test NAME` (that test's dir only), `-suite NAME` (that suite's whole subtree), or `-block NAME` (just that block's compile cache); with none of those, wipes everything under the work-dir-name root, including `_cache/`. |
-| `-monitor` | Combined with `-test`/`-suite`: live-prints every stage's state (`RUNNING`/`PASS`/`FAIL`/`DONE`/`ERROR`/`TIMEOUT`), duration, and cached-or-not every 2s, interleaved with that run's own output, until it finishes (then prints a final snapshot). Standalone (no `-test`/`-suite`): prints the last run's final status and exits. |
+| `-monitor` | Combined with `-test`/`-suite`: a single page (cleared and redrawn every second, not a scrolling feed) showing every stage's state/duration/cached-or-not, live, until that run finishes -- per-task one-line notices are suppressed for the run's duration since this page already shows the same thing. Standalone (no `-test`/`-suite`): prints the last run's final status and exits. |
 | `-watch` | With a *standalone* `-monitor` (no `-test`/`-suite`), keep re-polling every 2s (Ctrl-C to stop) instead of a single snapshot -- e.g. from a second terminal, watching a `-test`/`-suite` run in a first one. |
 | `-list` | Prints every test in `verif/testlists/standalone.yaml` (name, block dir, kind, `expect_fail`) and exits. |
 | `-work-dir-name NAME` | Overrides the top-level dir name under `$WORK_DIR` (default `WORK`). |
@@ -202,7 +202,41 @@ see [`regression_flow.md`](regression_flow.md)'s "Why this instead of a
 real job scheduler" section). It exists as a CLI placeholder so the
 interface doesn't need to change if a real scheduler gets wired in later.
 
-## 10. A gotcha worth knowing if you extend this
+## 10. The end-of-run summary, and why coverage doesn't dump a giant report
+
+Every `-test`/`-suite` run ends with a `SUMMARY` block: a per-stage
+breakdown (how many `filelist`/`model_build`/`compile`/`rtl_sim` tasks
+ran, how many were cache hits, `rtl_sim`'s pass/fail split) built from
+every `record_task()` call this process made, plus a `Coverage:` section
+(only shown if `-coverage` was passed) and a `Waves:` line (only if
+`-waves` actually opened one) -- i.e. only the sections for whatever you
+actually enabled:
+
+```
+============================================================
+SUMMARY
+============================================================
+Tasks:
+  model_build : 1 run, 1 cached (0.0s)
+  filelist    : 7 run (17.4s)
+  compile     : 18 run, 12 cached (75.9s)
+  rtl_sim     : 18 run -- 13 passed, 5 failed (7.0s)
+
+Coverage:
+  line 83.9%, toggle 54.4%, branch 82.5%, covergroup 66.9%
+  full report: .../smoke/coverage_summary.txt
+============================================================
+```
+
+`-coverage` itself only prints three short notices --
+`coverage: started`, `coverage: processing...`, `coverage: done` (or the
+actual error, if `tools/cov_merge.py` raises one) -- swallowing
+`merge_verilator()`'s own verbose per-hierarchy console dump (still
+written in full to `coverage_summary.txt` either way; the summary above
+is a condensed `line`/`toggle`/`branch`/`covergroup` reading of that same
+file's top few lines, not a separate calculation).
+
+## 11. A gotcha worth knowing if you extend this
 
 `SIM_BUILD`, unlike `COCOTB_RESULTS_FILE`, can't be redirected via a plain
 environment variable when going through `make` -- every block's Makefile

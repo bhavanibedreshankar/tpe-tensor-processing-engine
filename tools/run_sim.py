@@ -75,7 +75,9 @@ Examples:
 """
 import argparse
 import concurrent.futures
+import contextlib
 import hashlib
+import io
 import json
 import os
 import shutil
@@ -106,6 +108,10 @@ SUITES = ["standalone", "sanity", "smoke", "daily", "random"]
 _task_lock = threading.Lock()
 _model_build_done = False
 _filelist_done = {}  # dir_ -> source hash
+_session_tasks = []  # every record_task() call this process made, in order
+_quiet_console = False  # set in main() when -monitor is active: the live monitor
+                         # page is the real-time view, per-task lines would just
+                         # get overwritten/duplicate it
 
 
 def work_root(args) -> Path:
@@ -169,9 +175,17 @@ def write_status(task_dir: Path, **fields):
     path.write_text(json.dumps(data, indent=2))
 
 
-def print_task(stage: str, scope: str, state: str, duration_s: float, note: str = ""):
-    extra = f" ({note})" if note else ""
-    print(f"[{stage}] {scope}: {state} ({duration_s:.2f}s){extra}")
+def record_task(stage: str, scope: str, state: str, duration_s: float, note: str = ""):
+    """Records one stage's outcome for the end-of-run summary (see
+    print_final_summary) and, unless -monitor is live-watching this run
+    (in which case its own refreshing page already shows this), prints a
+    one-line notice."""
+    with _task_lock:
+        _session_tasks.append({"stage": stage, "scope": scope, "state": state,
+                                "duration_s": duration_s, "note": note})
+    if not _quiet_console:
+        extra = f" ({note})" if note else ""
+        print(f"[{stage}] {scope}: {state} ({duration_s:.2f}s){extra}")
 
 
 # ---------------------------------------------------------------------------
@@ -246,7 +260,7 @@ def ensure_filelist(croot: Path, dir_: str) -> dict:
     if cached is not None:
         return cached
     r = run_filelist(croot, dir_)
-    print_task(r["stage"], r["scope"], r["state"], r["duration_s"])
+    record_task(r["stage"], r["scope"], r["state"], r["duration_s"])
     info = {"hash": r["hash"], "toplevel": r["toplevel"], "module": r["module"],
             "extra_args": r["extra_args"]}
     with _task_lock:
@@ -284,7 +298,7 @@ def ensure_model_build(croot: Path) -> bool:
     if already:
         return True
     r = run_model_build(croot)
-    print_task(r["stage"], r["scope"], r["state"], r["duration_s"], r["note"])
+    record_task(r["stage"], r["scope"], r["state"], r["duration_s"], r["note"])
     return r["state"] == "PASS"
 
 
@@ -453,7 +467,7 @@ def run_rtl_sim(dir_: str, test: str, seed, result_dir: Path, sim_build: Path, f
         status, cocotb_time_s = parse_results_xml(results_xml, test)
 
     write_status(task_dir, state=status, duration_s=wall_s, end=_now())
-    print_task("rtl_sim", tag, status, wall_s)
+    record_task("rtl_sim", tag, status, wall_s)
 
     return {
         "tag": tag, "dir": dir_, "test": test, "seed": seed, "status": status,
@@ -472,7 +486,7 @@ def run_test(dir_: str, test: str, seed, result_dir: Path, timeout_s: int, croot
     filelist = ensure_filelist(croot, dir_)
 
     compile_result = run_compile(croot, dir_, filelist["hash"])
-    print_task(compile_result["stage"], compile_result["scope"], compile_result["state"],
+    record_task(compile_result["stage"], compile_result["scope"], compile_result["state"],
                compile_result["duration_s"], compile_result["note"])
     if compile_result["state"] != "PASS":
         tag = tag_for(dir_, test, seed)
@@ -531,24 +545,115 @@ def print_summary(results: list, suite: str, elapsed_s: float):
               "'Caught by' column -- cross-check before treating a FAIL as a regression.")
 
 
-def report_coverage(cov_dir: Path, annotate: bool):
+def _parse_coverage_summary(path: Path) -> str:
+    """Condenses verilator_coverage's summary report (line/toggle/branch/
+    covergroup % from its first few lines, before the per-hierarchy
+    breakdown) into one line for print_final_summary -- the full report
+    is still written in full to `path` for anyone who wants it."""
+    bits = []
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.endswith(":"):
+            if bits:
+                break  # reached "Hierarchy Coverage Summary:" or similar
+            continue
+        if ":" not in line or "%" not in line:
+            continue
+        name, _, rest = line.partition(":")
+        if name.strip() in ("line", "toggle", "branch", "covergroup"):
+            bits.append(f"{name.strip()} {rest.strip().split()[0]}")
+    return ", ".join(bits) if bits else "see coverage_summary.txt"
+
+
+def report_coverage(cov_dir: Path, annotate: bool) -> dict:
+    """Merges/reports coverage via tools/cov_merge.py, but swallows its
+    verbose per-hierarchy console dump (still written in full to
+    coverage_summary.txt) -- only a start/processing/done notice and any
+    error surface on the console; print_final_summary shows the condensed
+    score."""
+    log.info("run_sim: coverage: started")
     if not cov_dir.exists():
-        log.warning(f"run_sim: no coverage under {cov_dir}, nothing to merge")
-        return
-    merge_verilator(cov_dir, annotate)
-    merge_cocotb_coverage(cov_dir)
+        msg = f"no coverage under {cov_dir}, nothing to merge"
+        log.warning(f"run_sim: coverage: {msg}")
+        return {"error": msg}
+
+    log.info("run_sim: coverage: processing...")
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            merge_verilator(cov_dir, annotate)
+            merge_cocotb_coverage(cov_dir)
+    except Exception as exc:
+        log.error(f"run_sim: coverage: FAILED -- {exc}")
+        return {"error": str(exc)}
+
+    summary_path = cov_dir.parent / "coverage_summary.txt"
+    summary = _parse_coverage_summary(summary_path) if summary_path.exists() else "n/a"
+    log.info("run_sim: coverage: done")
+    return {"summary": summary, "path": summary_path}
 
 
-def open_waves(dump_vcd: Path):
+def open_waves(dump_vcd: Path) -> bool:
     if not dump_vcd.exists():
         log.warning(f"run_sim: no waveform at {dump_vcd} (did tracing run?)")
-        return
+        return False
     gtkwave = shutil.which("gtkwave")
     if not gtkwave:
         log.error("run_sim: gtkwave not found on PATH")
-        return
+        return False
     subprocess.Popen([gtkwave, str(dump_vcd)])
     log.info(f"run_sim: launched gtkwave on {dump_vcd}")
+    return True
+
+
+def print_final_summary(coverage_result: dict = None, waves_opened: Path = None):
+    """Printed at the end of every -test/-suite run: a stage-by-stage
+    breakdown of everything record_task() saw this process do, plus
+    coverage/waves sections -- only shown when that feature was actually
+    enabled this run."""
+    with _task_lock:
+        tasks = list(_session_tasks)
+
+    by_stage = defaultdict(lambda: {"count": 0, "cached": 0, "ok": 0, "bad": 0, "total_s": 0.0})
+    for t in tasks:
+        d = by_stage[t["stage"]]
+        d["count"] += 1
+        d["total_s"] += t["duration_s"]
+        if t["note"] == "cached":
+            d["cached"] += 1
+        if t["state"] in ("PASS", "DONE"):
+            d["ok"] += 1
+        elif t["state"] in ("FAIL", "ERROR", "TIMEOUT"):
+            d["bad"] += 1
+
+    print("\n" + "=" * 60)
+    print("SUMMARY")
+    print("=" * 60)
+    print("Tasks:")
+    for stage in ("model_build", "filelist", "compile", "rtl_sim"):
+        d = by_stage.get(stage)
+        if not d:
+            continue
+        bits = f"{d['count']} run"
+        if d["cached"]:
+            bits += f", {d['cached']} cached"
+        if stage == "rtl_sim":
+            bits += f" -- {d['ok']} passed, {d['bad']} failed"
+        elif d["bad"]:
+            bits += f" -- {d['bad']} failed"
+        print(f"  {stage:<12}: {bits} ({d['total_s']:.1f}s)")
+
+    if coverage_result is not None:
+        print("\nCoverage:")
+        if coverage_result.get("error"):
+            print(f"  ERROR: {coverage_result['error']}")
+        else:
+            print(f"  {coverage_result['summary']}")
+            print(f"  full report: {coverage_result['path']}")
+
+    if waves_opened is not None:
+        print(f"\nWaves: {waves_opened} (opened in GTKWave)")
+
+    print("=" * 60)
 
 
 def run_single_test(args) -> int:
@@ -571,11 +676,12 @@ def run_single_test(args) -> int:
     if entry.get("expect_fail") and r["status"] == "FAIL":
         print(f"note: FAIL expected -- see docs/verification/bug_list.md ({entry['expect_fail']})")
 
-    if args.coverage:
-        report_coverage(result_dir / "coverage", args.annotate)
-    if args.waves and r["dump_vcd"] is not None:
-        open_waves(r["dump_vcd"])
+    coverage_result = report_coverage(result_dir / "coverage", args.annotate) if args.coverage else None
+    waves_opened = None
+    if args.waves and r["dump_vcd"] is not None and open_waves(r["dump_vcd"]):
+        waves_opened = r["dump_vcd"]
 
+    print_final_summary(coverage_result, waves_opened)
     return 0 if r["status"] == "PASS" else 1
 
 
@@ -612,8 +718,8 @@ def run_suite(args) -> int:
     print_summary(results, args.suite, elapsed)
     log.info(f"run_sim: JUnit written to {junit_path}")
 
-    if args.coverage:
-        report_coverage(suite_root / "coverage", args.annotate)
+    coverage_result = report_coverage(suite_root / "coverage", args.annotate) if args.coverage else None
+    print_final_summary(coverage_result)
 
     infra_broken = any(r["status"] in ("ERROR", "TIMEOUT") for r in results)
     return 1 if infra_broken else 0
@@ -731,14 +837,16 @@ def do_monitor(args) -> int:
     return 0
 
 
-def _monitor_background(root: Path, stop_event: threading.Event, interval: float = 2.0):
+def _monitor_background(root: Path, stop_event: threading.Event, interval: float = 1.0):
     """Runs in a daemon thread alongside a live -test/-suite run (started
-    from main() when -monitor is combined with either), printing a
-    periodic snapshot -- appended, not screen-clearing, since the run
-    itself is also printing stage-completion lines to the same terminal
-    -- until `stop_event` is set once the run finishes."""
+    from main() when -monitor is combined with either): a single page,
+    cleared and redrawn every `interval` seconds -- not a scrolling feed
+    -- until `stop_event` is set once the run finishes. Per-task console
+    lines (record_task) are suppressed for the run's duration (see
+    `_quiet_console`) so this page is the only thing moving."""
     while not stop_event.is_set():
-        print(f"\n--- run_sim monitor -- {_now()} ---")
+        print("\033[2J\033[H", end="")  # clear screen, home cursor
+        print(f"run_sim monitor -- {root}\n")
         _print_monitor(root)
         stop_event.wait(interval)
 
@@ -824,6 +932,8 @@ def main():
     monitor_thread = None
     stop_event = threading.Event()
     if args.monitor:
+        global _quiet_console
+        _quiet_console = True  # the monitor page is the real-time view now
         monitor_thread = threading.Thread(
             target=_monitor_background, args=(work_root(args), stop_event), daemon=True)
         monitor_thread.start()
@@ -834,8 +944,6 @@ def main():
         if monitor_thread:
             stop_event.set()
             monitor_thread.join(timeout=5)
-            print("\n--- run_sim monitor: final status ---")
-            _print_monitor(work_root(args))
 
     sys.exit(rc)
 
