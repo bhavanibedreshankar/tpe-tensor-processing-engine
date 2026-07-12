@@ -9,6 +9,7 @@ MODULE   := test_dma
 REPO_ROOT := $(abspath ../../..)
 
 VERILOG_SOURCES := \
+	$(REPO_ROOT)/rtl/include/tpe_verbosity.svh \
 	$(REPO_ROOT)/rtl/include/tpe_pkg.sv \
 	$(REPO_ROOT)/rtl/common/dp_ram.sv \
 	$(REPO_ROOT)/rtl/sram/tpe_sram.sv \

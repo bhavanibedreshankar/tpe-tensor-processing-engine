@@ -263,4 +263,21 @@ module matrix_engine
       .result_overflow (arr_result_overflow)
   );
 
+  // ---- Debug logging (see rtl/include/tpe_verbosity.svh) -----------------
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      // no state to reset -- debug prints only
+    end else begin
+      if (start) begin
+        `TPE_LOG_MEDIUM("matrix_engine", $sformatf("start m=%0d k=%0d n=%0d", dim_m, dim_k, dim_n));
+      end
+      if (done) begin
+        `TPE_LOG_MEDIUM("matrix_engine", "done");
+        if (overflow_sticky) begin
+          `TPE_LOG_LOW("matrix_engine", "accumulator overflow occurred during this op");
+        end
+      end
+    end
+  end
+
 endmodule

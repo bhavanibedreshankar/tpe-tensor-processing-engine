@@ -90,4 +90,16 @@ module mac_array #(
     assign result_overflow[c] = ovf_grid[ROWS][c];
   end
 
+  // ---- Debug logging (see rtl/include/tpe_verbosity.svh) -- array-level
+  // only (not per-PE, up to ROWS*COLS=256 instances at full size -- see
+  // pe.sv, deliberately not instrumented individually).
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      // no state to reset -- debug prints only
+    end else if (|result_valid) begin
+      `TPE_LOG_DEBUG("mac_array", $sformatf("result_valid=%0b result_overflow=%0b",
+                                             result_valid, result_overflow));
+    end
+  end
+
 endmodule

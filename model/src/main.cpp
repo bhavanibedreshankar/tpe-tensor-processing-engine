@@ -17,6 +17,9 @@
 #include "DmaEngine.hpp"
 #include "MacArray.hpp"
 #include "Scratchpad.hpp"
+#include "Verbosity.hpp"
+
+using tpe::model::Verbosity;
 
 namespace {
 
@@ -57,6 +60,9 @@ int cmd_sram_apply(int argc, char** argv) {
   const std::size_t depth = argc > 4 ? static_cast<std::size_t>(std::stoul(argv[4])) : 4096;
   const std::size_t row_bytes = argc > 5 ? static_cast<std::size_t>(std::stoul(argv[5])) : 16;
 
+  TPE_LOG(Verbosity::MEDIUM, "sram-apply: ops=" << ops_path << " depth=" << depth
+                                                 << " row_bytes=" << row_bytes);
+
   const auto raw = read_file(ops_path);
   if (raw.size() % sizeof(SramOpRecord) != 0) {
     std::cerr << "error: ops file size " << raw.size() << " is not a multiple of record size "
@@ -70,11 +76,13 @@ int cmd_sram_apply(int argc, char** argv) {
     SramOpRecord rec;
     std::memcpy(&rec, raw.data() + i * sizeof(SramOpRecord), sizeof(SramOpRecord));
     sram.write(rec.addr, rec.strb, rec.row_data);
+    TPE_LOG(Verbosity::DEBUG, "  op " << i << ": addr=0x" << std::hex << rec.addr
+                                       << " strb=0x" << rec.strb << std::dec);
   }
 
   write_file(out_path, sram.raw_image());
-  std::cerr << "tpe_model: applied " << n_ops << " ops, wrote " << sram.raw_image().size()
-            << " byte image to " << out_path << "\n";
+  TPE_LOG(Verbosity::LOW, "tpe_model: applied " << n_ops << " ops, wrote " << sram.raw_image().size()
+                                                 << " byte image to " << out_path);
   return 0;
 }
 
@@ -102,6 +110,8 @@ int cmd_matmul(int argc, char** argv) {
   }
   MatmulHeader hdr;
   std::memcpy(&hdr, raw.data(), sizeof(hdr));
+  TPE_LOG(Verbosity::MEDIUM, "matmul: " << hdr.m << "x" << hdr.k << "x" << hdr.n
+                                         << " stim=" << argv[2]);
   const std::size_t a_bytes = static_cast<std::size_t>(hdr.m) * hdr.k;
   const std::size_t b_bytes = static_cast<std::size_t>(hdr.k) * hdr.n;
   const std::size_t c_bytes = static_cast<std::size_t>(hdr.m) * hdr.n * 4;
@@ -129,6 +139,16 @@ int cmd_matmul(int argc, char** argv) {
 
   bool any_overflow = false;
   tpe::model::Matrix c_out = tpe::model::matmul(a, b, c_in, &any_overflow);
+  if (any_overflow) {
+    TPE_LOG(Verbosity::HIGH, "matmul: accumulator overflow detected during reduction");
+  }
+  if (tpe::model::verbosity() >= Verbosity::DEBUG) {
+    for (int i = 0; i < c_out.rows && i < 8; ++i) {
+      for (int j = 0; j < c_out.cols && j < 8; ++j) {
+        TPE_LOG(Verbosity::DEBUG, "  c[" << i << "][" << j << "] = " << c_out.at(i, j));
+      }
+    }
+  }
 
   std::vector<std::uint8_t> out(c_bytes + 4);
   std::memcpy(out.data(), c_out.data.data(), c_bytes);
@@ -136,8 +156,9 @@ int cmd_matmul(int argc, char** argv) {
   std::memcpy(out.data() + c_bytes, &ovf_flag, 4);
   write_file(argv[3], out);
 
-  std::cerr << "tpe_model: matmul " << hdr.m << "x" << hdr.k << "x" << hdr.n
-            << (any_overflow ? " (overflow)" : "") << " -> " << argv[3] << "\n";
+  TPE_LOG(Verbosity::LOW, "tpe_model: matmul " << hdr.m << "x" << hdr.k << "x" << hdr.n
+                                                << (any_overflow ? " (overflow)" : "")
+                                                << " -> " << argv[3]);
   return 0;
 }
 
@@ -175,6 +196,10 @@ int cmd_dma_apply(int argc, char** argv) {
 
   DmaHeader hdr;
   std::memcpy(&hdr, raw.data(), sizeof(hdr));
+  TPE_LOG(Verbosity::MEDIUM, "dma-apply: " << (hdr.dir ? "SRAM->DDR" : "DDR->SRAM")
+                                            << " mem_row=" << hdr.mem_row
+                                            << " sram_row=" << hdr.sram_row
+                                            << " n_rows=" << hdr.n_rows);
 
   tpe::model::Scratchpad ddr(ddr_depth, row_bytes);
   tpe::model::Scratchpad sram(sram_depth, row_bytes);
@@ -182,14 +207,21 @@ int cmd_dma_apply(int argc, char** argv) {
   sram.load_image(raw.data() + sizeof(hdr) + ddr_bytes, sram_bytes);
 
   tpe::model::DmaEngine::copy(ddr, sram, hdr.mem_row, hdr.sram_row, hdr.n_rows, hdr.dir != 0);
+  if (tpe::model::verbosity() >= Verbosity::DEBUG) {
+    for (std::uint32_t i = 0; i < hdr.n_rows; ++i) {
+      TPE_LOG(Verbosity::DEBUG, "  row " << i << ": mem_row=" << (hdr.mem_row + i)
+                                          << " sram_row=" << (hdr.sram_row + i));
+    }
+  }
 
   std::vector<std::uint8_t> out;
   out.insert(out.end(), ddr.raw_image().begin(), ddr.raw_image().end());
   out.insert(out.end(), sram.raw_image().begin(), sram.raw_image().end());
   write_file(argv[3], out);
 
-  std::cerr << "tpe_model: dma-apply " << hdr.n_rows << " rows " << (hdr.dir ? "SRAM->DDR" : "DDR->SRAM")
-            << " -> " << argv[3] << "\n";
+  TPE_LOG(Verbosity::LOW, "tpe_model: dma-apply " << hdr.n_rows << " rows "
+                                                   << (hdr.dir ? "SRAM->DDR" : "DDR->SRAM")
+                                                   << " -> " << argv[3]);
   return 0;
 }
 

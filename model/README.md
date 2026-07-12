@@ -23,6 +23,7 @@ and avoids pybind11 build fragility across environments.
 include/Scratchpad.hpp   golden model of rtl/sram/tpe_sram.sv (+ load_image bulk loader)
 include/MacArray.hpp     golden model of rtl/matrix_engine/*.sv (matmul + saturating_add)
 include/DmaEngine.hpp    golden model of rtl/dma/tpe_dma.sv (row-copy between two Scratchpads)
+include/Verbosity.hpp    leveled debug logging (TPE_VERBOSITY env var), see below
 src/main.cpp             tpe_model CLI (sram-apply, matmul, dma-apply subcommands)
 tests/test_scratchpad.cpp  dependency-free unit tests (no Catch2/GoogleTest)
 tests/test_matmul.cpp      ditto, incl. saturation-on-overflow cases
@@ -35,3 +36,18 @@ Build and test:
 make        # builds build/tpe_model
 make test   # builds and runs build/test_scratchpad
 ```
+
+## Debug verbosity
+
+Every subcommand prints leveled `TPE_LOG(...)` debug lines (`NONE`
+default -- silent, `LOW`/`MEDIUM`/`HIGH`/`DEBUG` add progressively more
+detail), gated by the `TPE_VERBOSITY` env var:
+```
+TPE_VERBOSITY=DEBUG ./build/tpe_model matmul stim.bin out.bin
+```
+Mirrors the RTL design's own `+VERBOSITY=<LEVEL>` plusarg
+(`rtl/include/tpe_verbosity.svh`) with the same level names, so
+`run_sim -verbosity <LEVEL>` sets both at once for a real test run (see
+`docs/flows/run_sim_flow.md`) -- including when `tpe_model` is invoked
+mid-test by a scoreboard (`verif/cocotb_tb/env/golden_model.py` forwards
+its output into that test's `run.log` when `TPE_VERBOSITY` is set).

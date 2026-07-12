@@ -170,4 +170,27 @@ module tpe_debug
     end
   end
 
+  // ---- Debug logging (see rtl/include/tpe_verbosity.svh) -----------------
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      // no state to reset -- debug prints only
+    end else begin
+      if (sched_done_valid && sched_done_status != STAT_OK) begin
+        `TPE_LOG_LOW("debug", $sformatf("error latched: tag=%0d status=%0s",
+                                        sched_done_tag, sched_done_status.name()));
+      end
+      if (trace_wr_en) begin
+        `TPE_LOG_MEDIUM("debug", $sformatf("trace: tag=%0d opcode=%0s status=%0s",
+                                           sched_done_tag, sched_done_opcode.name(),
+                                           sched_done_status.name()));
+      end else if (sched_done_valid && !ctrl_trace_enable_q) begin
+        `TPE_LOG_DEBUG("debug", "trace dropped: trace disabled");
+      end
+      if (do_write && s_awaddr == DEBUG_CTRL_ADDR) begin
+        `TPE_LOG_HIGH("debug", $sformatf("ctrl write trace_enable=%0b",
+                                         s_wdata[DEBUG_CTRL_TRACE_ENABLE_MSB]));
+      end
+    end
+  end
+
 endmodule

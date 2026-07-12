@@ -379,4 +379,25 @@ module tpe_top
     endcase
   end
 
+  // ---- Debug logging (see rtl/include/tpe_verbosity.svh) -- system-level
+  // events only; every sub-block (cmd_proc/scheduler/dma/matrix_engine/pmu/
+  // debug) already logs its own activity when instantiated here.
+  logic irq_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      irq_q <= 1'b0;
+    end else begin
+      irq_q <= irq;
+      if (irq && !irq_q) begin
+        `TPE_LOG_MEDIUM("top", "irq asserted");
+      end
+      if (wr_is_none && s_awvalid && s_wvalid && !none_wresp_q) begin
+        `TPE_LOG_LOW("top", $sformatf("MMIO write to undecoded address %0h absorbed", s_awaddr));
+      end
+      if (rd_is_none && s_arvalid && !none_rresp_q) begin
+        `TPE_LOG_LOW("top", $sformatf("MMIO read from undecoded address %0h absorbed", s_araddr));
+      end
+    end
+  end
+
 endmodule

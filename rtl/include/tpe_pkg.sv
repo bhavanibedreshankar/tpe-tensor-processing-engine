@@ -101,4 +101,50 @@ package tpe_pkg;
     end
   endfunction
 
+  // ---------------------------------------------------------------------
+  // Debug verbosity (rtl/include/tpe_verbosity.svh's `TPE_LOG_* macros) --
+  // selected once at runtime via `+VERBOSITY=<LEVEL>` (default NONE, i.e.
+  // off: no `$display` output, no behavior/timing change versus before
+  // this existed). Names mirror UVM's uvm_verbosity without depending on
+  // UVM itself -- this repo's RTL sim doesn't use it. `run_sim -verbosity`
+  // sets this plusarg and the C++ golden model's TPE_VERBOSITY env var
+  // together (docs/flows/run_sim_flow.md).
+  // ---------------------------------------------------------------------
+  typedef enum int {
+    TPE_VERB_NONE   = 0,
+    TPE_VERB_LOW    = 1,
+    TPE_VERB_MEDIUM = 2,
+    TPE_VERB_HIGH   = 3,
+    TPE_VERB_DEBUG  = 4
+  } tpe_verbosity_e;
+
+  function automatic tpe_verbosity_e tpe_verbosity();
+    static bit initialized = 0;
+    static tpe_verbosity_e level = TPE_VERB_NONE;
+    string level_str;
+    if (!initialized) begin
+      if ($value$plusargs("VERBOSITY=%s", level_str)) begin
+        case (level_str)
+          "LOW":    level = TPE_VERB_LOW;
+          "MEDIUM": level = TPE_VERB_MEDIUM;
+          "HIGH":   level = TPE_VERB_HIGH;
+          "DEBUG":  level = TPE_VERB_DEBUG;
+          default:  level = TPE_VERB_NONE;
+        endcase
+      end
+      initialized = 1;
+    end
+    return level;
+  endfunction
+
+  function automatic string tpe_verbosity_name(input tpe_verbosity_e lvl);
+    case (lvl)
+      TPE_VERB_LOW:    return "LOW";
+      TPE_VERB_MEDIUM: return "MEDIUM";
+      TPE_VERB_HIGH:   return "HIGH";
+      TPE_VERB_DEBUG:  return "DEBUG";
+      default:         return "NONE";
+    endcase
+  endfunction
+
 endpackage : tpe_pkg

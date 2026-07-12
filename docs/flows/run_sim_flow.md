@@ -150,6 +150,7 @@ Every option accepts both a single- and double-dash spelling
 | `-seed N` | `TPE_SEED` override, only meaningful with `-test` on a `kind: random` entry. Suite entries carry their own per-test seed from the testlist YAML -- `-seed` doesn't apply there. |
 | `-jobs N` | Max concurrent block directories for `-suite` (default: `nproc`). Tests within the same block directory always run sequentially -- see [`regression_flow.md`](regression_flow.md) section 2 for why. |
 | `-timeout N` | Per-test timeout in seconds (default 120). |
+| `-verbosity {NONE,LOW,MEDIUM,HIGH,DEBUG}` | Debug print level for both the RTL design (`+VERBOSITY=` plusarg, `rtl/include/tpe_verbosity.svh`) and the C++ golden model (`TPE_VERBOSITY` env var, `model/include/Verbosity.hpp`, including when a scoreboard invokes it mid-test) -- see `docs/flows/build_flow.md` section 7. Default: unset, i.e. silent. |
 | `-farm` | Runs the same local parallel execution as a plain `-suite` run; today this is a naming placeholder only (no remote scheduler wired up), see section 9. |
 | `-coverage` | Keep this run's `coverage.dat`, merge/report it via `tools/cov_merge.py` (imported directly, its own verbose per-hierarchy dump swallowed -- see section 10) -- works with `-test` or `-suite`. |
 | `-annotate` | With `-coverage`, also write a per-source annotated report (`verilator_coverage --annotate`). |
@@ -168,6 +169,7 @@ Every option accepts both a single- and double-dash spelling
 ./run_sim -test dma_sanity_test
 ./run_sim -test dma_random_test -seed 12345 -coverage
 ./run_sim -test matmul_overflow_test -waves            # opens GTKWave once done
+./run_sim -test matmul_overflow_test -verbosity DEBUG   # design + golden model debug prints
 ./run_sim -suite smoke -jobs 8 -coverage -annotate
 ./run_sim -suite daily -farm
 ./run_sim -lint -block tpe_dma

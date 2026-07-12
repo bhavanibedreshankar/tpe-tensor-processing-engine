@@ -457,7 +457,7 @@ def _failure_signature(log_text: str, max_len: int = 80) -> str:
 
 def run_rtl_sim(dir_: str, test: str, seed, result_dir: Path, sim_build: Path, filelist: dict,
                  timeout_s: int, cov_root: Path = None, keep_coverage: bool = False,
-                 keep_waves: bool = False) -> dict:
+                 keep_waves: bool = False, verbosity: str = None) -> dict:
     """Invokes the already-compiled Vtop binary directly (cwd=block_dir,
     not through `make -C block_dir`). Going through make here would
     re-evaluate Vtop.mk's rule chain -- which depends on the phony `model`
@@ -496,10 +496,14 @@ def run_rtl_sim(dir_: str, test: str, seed, result_dir: Path, sim_build: Path, f
     })
     if seed is not None:
         env["TPE_SEED"] = str(seed)
+    if verbosity:
+        env["TPE_VERBOSITY"] = verbosity  # golden model (run via scoreboards mid-test)
 
     argv = [str(sim_build / "Vtop"), "--trace-file", str(dump_vcd)] \
         + filelist["extra_args"].split() \
         + [f"+verilator+coverage+file+{coverage_dat}"]
+    if verbosity:
+        argv.append(f"+VERBOSITY={verbosity}")  # RTL design (rtl/include/tpe_verbosity.svh)
 
     start = time.time()
     timed_out = False
@@ -548,7 +552,8 @@ def run_rtl_sim(dir_: str, test: str, seed, result_dir: Path, sim_build: Path, f
 
 
 def run_test(dir_: str, test: str, seed, result_dir: Path, timeout_s: int, croot: Path,
-             cov_root: Path = None, keep_coverage: bool = False, keep_waves: bool = False) -> dict:
+             cov_root: Path = None, keep_coverage: bool = False, keep_waves: bool = False,
+             verbosity: str = None) -> dict:
     """Runs the full stage pipeline for one test: model_build and filelist
     are shared/cached (run once per run_sim invocation), compile is shared
     per block (skips real work when the shared sim_build is already up to
@@ -570,17 +575,18 @@ def run_test(dir_: str, test: str, seed, result_dir: Path, timeout_s: int, croot
 
     return run_rtl_sim(dir_, test, seed, result_dir, compile_result["sim_build"], filelist,
                         timeout_s, cov_root=cov_root, keep_coverage=keep_coverage,
-                        keep_waves=keep_waves)
+                        keep_waves=keep_waves, verbosity=verbosity)
 
 
-def run_group(entries: list, suite_root: Path, timeout_s: int, croot: Path, keep_coverage: bool) -> list:
+def run_group(entries: list, suite_root: Path, timeout_s: int, croot: Path, keep_coverage: bool,
+              verbosity: str = None) -> list:
     cov_root = suite_root / "coverage"
     out = []
     for e in entries:
         seed = e.get("seed")
         tag = tag_for(e["dir"], e["test"], seed)
         out.append(run_test(e["dir"], e["test"], seed, suite_root / tag, timeout_s, croot,
-                             cov_root=cov_root, keep_coverage=keep_coverage))
+                             cov_root=cov_root, keep_coverage=keep_coverage, verbosity=verbosity))
     return out
 
 
@@ -746,7 +752,7 @@ def run_single_test(args) -> int:
                  + f" -> {result_dir}")
 
         r = run_test(entry["dir"], args.test, args.seed, result_dir, args.timeout, cache_root(args),
-                     keep_coverage=args.coverage, keep_waves=args.waves)
+                     keep_coverage=args.coverage, keep_waves=args.waves, verbosity=args.verbosity)
         print(f"\n{r['tag']:<50} {r['status']:<8} {r['wall_s']:>8.2f}s")
         if r.get("signature"):
             print(f"failure: {r['signature']}")
@@ -782,7 +788,8 @@ def run_suite(args) -> int:
         start = time.time()
         results = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as ex:
-            futures = {ex.submit(run_group, es, suite_root, args.timeout, croot, args.coverage): d
+            futures = {ex.submit(run_group, es, suite_root, args.timeout, croot, args.coverage,
+                                  args.verbosity): d
                        for d, es in groups.items()}
             for fut in concurrent.futures.as_completed(futures):
                 d = futures[fut]
@@ -961,6 +968,12 @@ def build_parser() -> argparse.ArgumentParser:
                      help="max concurrent block directories for --suite (default: nproc)")
     ap.add_argument("-timeout", "--timeout", dest="timeout", type=int, default=DEFAULT_TIMEOUT_S,
                      help="per-test timeout in seconds (default: %(default)s)")
+    ap.add_argument("-verbosity", "--verbosity", dest="verbosity", default=None,
+                     choices=["NONE", "LOW", "MEDIUM", "HIGH", "DEBUG"],
+                     help="debug print level for both the RTL design (+VERBOSITY= plusarg, "
+                          "rtl/include/tpe_verbosity.svh) and the C++ golden model "
+                          "(TPE_VERBOSITY env var, model/include/Verbosity.hpp) -- default: "
+                          "unset, i.e. silent (same as before this existed)")
     ap.add_argument("-farm", "--farm", dest="farm", action="store_true",
                      help="run via the local parallel job runner (alias for now -- "
                           "no remote scheduler wired up, see docs/HANDBOOK.md)")

@@ -196,4 +196,23 @@ module tpe_pmu
     end
   end
 
+  // ---- Debug logging (see rtl/include/tpe_verbosity.svh) -----------------
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      // no state to reset -- debug prints only
+    end else begin
+      if (do_write && s_awaddr == PMU_CTRL_ADDR) begin
+        `TPE_LOG_MEDIUM("pmu", $sformatf("ctrl write enable=%0b reset_counters=%0b",
+                                         s_wdata[PMU_CTRL_ENABLE_MSB],
+                                         s_wdata[PMU_CTRL_RESET_COUNTERS_MSB]));
+      end
+      if (counting && cmd_done_valid) begin
+        `TPE_LOG_HIGH("pmu", $sformatf("command latency=%0d cycles", latency_ctr_q));
+      end
+      if (counting && dispatch_start) begin
+        `TPE_LOG_DEBUG("pmu", "dispatch latency window opened");
+      end
+    end
+  end
+
 endmodule

@@ -8,6 +8,13 @@
 // One AXI4 beat == one SRAM row (both AXI_DATA_WIDTH and SRAM_DATA_WIDTH
 // are 128b, see rtl/include/tpe_pkg.sv), so each beat maps 1:1 to an
 // incrementing SRAM address with no width conversion needed.
+// Debug logging macros (`TPE_LOG_*): rtl/include/tpe_verbosity.svh, listed
+// as an explicit source ahead of this file in every Makefile/lint.py entry
+// (its `define`s then apply globally for the rest of this compile) --
+// not `included` here since Verilator resolves a quoted `include` path
+// relative to the invoking process's CWD, which differs between lint.py
+// (repo root) and the real per-block Makefile compile (that block's
+// testbench dir); an explicit source entry sidesteps the whole question.
 module tpe_dma
   import tpe_pkg::*;
 #(
@@ -169,6 +176,38 @@ module tpe_dma
   assign busy  = (state_q != ST_IDLE);
   assign done  = (state_q == ST_DONE);
   assign error = (state_q == ST_ERROR);
+
+  // ---- Debug logging (see rtl/include/tpe_verbosity.svh) -----------------
+  // Matches this module's async-reset style (@(posedge clk or negedge
+  // rst_n), even though there's no state to actually reset here -- a
+  // synchronous-only sensitivity list on the same rst_n net used async
+  // elsewhere in this module trips Verilator's SYNCASYNCNET lint check.
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      // no state to reset -- debug prints only
+    end else begin
+      if (state_q == ST_IDLE && start) begin
+        `TPE_LOG_MEDIUM("dma", $sformatf(
+            "start dir=%0s mem_addr=%0h sram_addr=%0h len=%0d",
+            desc_dir ? "SRAM->DDR" : "DDR->SRAM", desc_mem_addr, desc_sram_addr, desc_len));
+      end
+      if (state_d == ST_ERROR && state_q != ST_ERROR) begin
+        `TPE_LOG_LOW("dma", $sformatf("error: descriptor len=%0d misaligned to %0d-byte beats",
+                                       desc_len, BeatBytes));
+      end
+      if (state_d == ST_DONE && state_q != ST_DONE) begin
+        `TPE_LOG_MEDIUM("dma", "transfer complete");
+      end
+      if (state_d != state_q) begin
+        `TPE_LOG_HIGH("dma", $sformatf("state %0s -> %0s", state_q.name(), state_d.name()));
+      end
+      if ((state_q == ST_RD_DATA && m_rvalid && m_rready)
+          || (state_q == ST_WR_DATA && m_wvalid && m_wready)) begin
+        `TPE_LOG_DEBUG("dma", $sformatf("beat mem_addr=%0h sram_addr=%0h beats_left=%0d",
+                                          mem_addr_q, sram_addr_q, beats_remaining_q));
+      end
+    end
+  end
 
   // ---- AXI4 read channel -----------------------------------------------
   assign m_arvalid = (state_q == ST_RD_ADDR);

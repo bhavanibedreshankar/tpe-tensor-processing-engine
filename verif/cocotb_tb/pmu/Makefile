@@ -9,6 +9,7 @@ MODULE   := test_pmu
 REPO_ROOT := $(abspath ../../..)
 
 VERILOG_SOURCES := \
+	$(REPO_ROOT)/rtl/include/tpe_verbosity.svh \
 	$(REPO_ROOT)/rtl/include/tpe_pkg.sv \
 	$(REPO_ROOT)/rtl/include/tpe_regs_pkg.sv \
 	$(REPO_ROOT)/rtl/pmu/tpe_pmu.sv \

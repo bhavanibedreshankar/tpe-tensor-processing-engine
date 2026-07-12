@@ -93,3 +93,28 @@ make toolchain-smoke   # proves the chain works, independent of real RTL
 Full per-milestone build+sim targets (`make sim-<block>`) are added as each
 block lands; see the top-level [README](../../README.md) for current
 status.
+
+## 7. Debug verbosity
+
+Every RTL block (and the C++ golden model, see `model/README.md`) has
+leveled debug prints -- `NONE` (default, silent, no behavior/timing
+change), `LOW`, `MEDIUM`, `HIGH`, `DEBUG` -- mirroring UVM's
+`uvm_verbosity` naming without depending on UVM itself:
+
+```
++VERBOSITY=DEBUG   # SIM_ARGS/PLUSARGS to a block's compiled Vtop binary
+TPE_VERBOSITY=DEBUG   # env var for the C++ golden model
+```
+
+`run_sim -verbosity <LEVEL>` sets both at once for a real test run,
+including the golden model when a scoreboard invokes it mid-test (see
+`docs/flows/run_sim_flow.md`). `rtl/include/tpe_verbosity.svh` defines
+the `` `TPE_LOG_LOW/MEDIUM/HIGH/DEBUG(name, msg)`` macros every
+instrumented block uses -- listed as an explicit compile-unit source
+(not `` `include``d) in every block's `VERILOG_SOURCES`/`tools/lint.py`
+entry, ahead of `tpe_pkg.sv`, since Verilator resolves a quoted
+`` `include`` path relative to the invoking process's CWD (which differs
+between `lint.py` and the real per-block Makefile compile) rather than
+the including file's own directory -- an explicit source entry sidesteps
+that entirely, since `` `define``s apply globally in file-list order
+regardless of extension.

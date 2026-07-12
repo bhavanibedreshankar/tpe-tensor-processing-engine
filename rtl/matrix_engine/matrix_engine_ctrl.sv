@@ -297,4 +297,30 @@ module matrix_engine_ctrl #(
   assign busy = (state_q != ST_IDLE);
   assign done = (state_q == ST_DONE);
 
+  // ---- Debug logging (see rtl/include/tpe_verbosity.svh) -----------------
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      // no state to reset -- debug prints only
+    end else begin
+      if (state_d != state_q) begin
+        `TPE_LOG_HIGH("matrix_engine_ctrl", $sformatf("state %0s -> %0s",
+                                                       state_q.name(), state_d.name()));
+      end
+      if (wbuf_ren) begin
+        `TPE_LOG_DEBUG("matrix_engine_ctrl", $sformatf("weight row %0d/%0d loaded",
+                                                        wload_idx_q, k_q));
+      end
+      if (abuf_ren) begin
+        `TPE_LOG_DEBUG("matrix_engine_ctrl", $sformatf("activation row %0d/%0d fetched",
+                                                        m_fetch_idx_q, m_q));
+      end
+      for (int c = 0; c < COLS; c++) begin
+        if (arr_result_valid[c] && arr_result_overflow[c]) begin
+          `TPE_LOG_LOW("matrix_engine_ctrl", $sformatf("accumulator overflow col=%0d row=%0d",
+                                                        c, out_m_idx_q[c]));
+        end
+      end
+    end
+  end
+
 endmodule

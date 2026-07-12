@@ -24,7 +24,7 @@ from tools.common.logger import get_logger  # noqa: E402
 
 log = get_logger("lint")
 
-PKG = ["rtl/include/tpe_pkg.sv", "rtl/include/tpe_regs_pkg.sv"]
+PKG = ["rtl/include/tpe_verbosity.svh", "rtl/include/tpe_pkg.sv", "rtl/include/tpe_regs_pkg.sv"]
 COMMON_ALL = PKG + ["rtl/common/sync_fifo.sv", "rtl/common/round_robin_arb.sv", "rtl/common/dp_ram.sv"]
 
 # (block name, sources, top module, extra -Wno flags)

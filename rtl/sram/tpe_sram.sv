@@ -49,4 +49,15 @@ module tpe_sram
       .b_rdata(b_rdata)
   );
 
+  // ---- Debug logging (see rtl/include/tpe_verbosity.svh) -- no rst_n on
+  // this thin wrapper, so no reset branch needed here unlike other blocks.
+  always_ff @(posedge clk) begin
+    if (a_en) begin
+      `TPE_LOG_DEBUG("sram", $sformatf("port A %0s addr=%0h", a_we ? "write" : "read", a_addr));
+    end
+    if (b_en) begin
+      `TPE_LOG_DEBUG("sram", $sformatf("port B %0s addr=%0h", b_we ? "write" : "read", b_addr));
+    end
+  end
+
 endmodule

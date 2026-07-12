@@ -9,6 +9,7 @@ MODULE   := test_debug
 REPO_ROOT := $(abspath ../../..)
 
 VERILOG_SOURCES := \
+	$(REPO_ROOT)/rtl/include/tpe_verbosity.svh \
 	$(REPO_ROOT)/rtl/include/tpe_pkg.sv \
 	$(REPO_ROOT)/rtl/include/tpe_regs_pkg.sv \
 	$(REPO_ROOT)/rtl/common/sync_fifo.sv \

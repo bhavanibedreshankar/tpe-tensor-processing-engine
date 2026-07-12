@@ -67,4 +67,21 @@ module sync_fifo #(
     end
   end
 
+  // ---- Debug logging (see rtl/include/tpe_verbosity.svh) -----------------
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      // no state to reset -- debug prints only
+    end else begin
+      if (wr_en && full) begin
+        `TPE_LOG_LOW("sync_fifo", "write attempted while full, dropped");
+      end
+      if (do_write) begin
+        `TPE_LOG_DEBUG("sync_fifo", $sformatf("push count=%0d/%0d", count_q + 1'b1, DEPTH));
+      end
+      if (do_read) begin
+        `TPE_LOG_DEBUG("sync_fifo", $sformatf("pop count=%0d/%0d", count_q - 1'b1, DEPTH));
+      end
+    end
+  end
+
 endmodule
