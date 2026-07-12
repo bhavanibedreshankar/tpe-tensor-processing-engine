@@ -1,0 +1,918 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TPE — Tensor Processing Engine</title>
+<meta name="description" content="An open-source, from-scratch AI accelerator chip: RTL design, C++ golden model, and a full professional-grade verification environment." />
+<style>
+  :root {
+    --bg: #0a0f0f;
+    --bg-panel: #101a1b;
+    --bg-panel-2: #142224;
+    --bg-panel-3: #0d1516;
+    --grid-line: rgba(120, 220, 200, 0.07);
+    --accent: #4ce8c4;
+    --accent-rgb: 76, 232, 196;
+    --accent-dim: #2b7a68;
+    --accent-soft: rgba(76, 232, 196, 0.14);
+    --amber: #ffb454;
+    --amber-rgb: 255, 180, 84;
+    --amber-soft: rgba(255, 180, 84, 0.14);
+    --text: #e7f3f0;
+    --text-muted: #7fa39b;
+    --text-dim: #547069;
+    --border: rgba(127, 163, 155, 0.22);
+    --border-bright: rgba(127, 163, 155, 0.4);
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --radius: 3px;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+  }
+
+  body {
+    margin: 0;
+    background:
+      linear-gradient(var(--grid-line) 1px, transparent 1px) 0 0 / 100% 44px,
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px) 0 0 / 44px 100%,
+      var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a { color: inherit; }
+  ::selection { background: var(--accent-soft); color: var(--text); }
+
+  a:focus-visible, button:focus-visible, .node:focus-visible, .step-dot:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 28px; }
+  .wrap-wide { max-width: 1320px; margin: 0 auto; padding: 0 28px; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .eyebrow::before {
+    content: "";
+    width: 20px;
+    height: 1px;
+    background: var(--accent-dim);
+    display: inline-block;
+  }
+
+  h1, h2, h3 {
+    font-family: var(--sans);
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    margin: 0;
+  }
+
+  .section-title {
+    font-size: clamp(28px, 4vw, 40px);
+    line-height: 1.1;
+    margin: 14px 0 0;
+  }
+
+  .section-lede {
+    color: var(--text-muted);
+    font-size: 17px;
+    max-width: 62ch;
+    margin: 18px 0 0;
+  }
+
+  .rule {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border) 15%, var(--border) 85%, transparent);
+    position: relative;
+    margin: 0;
+  }
+  .rule::before, .rule::after {
+    content: "";
+    position: absolute;
+    top: -3px;
+    width: 1px;
+    height: 7px;
+    background: var(--border-bright);
+  }
+  .rule::before { left: 15%; }
+  .rule::after { right: 15%; }
+
+  section { padding: 96px 0; }
+  @media (max-width: 720px) { section { padding: 64px 0; } }
+
+  /* ---------- nav ---------- */
+  nav {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    backdrop-filter: blur(10px);
+    background: rgba(10, 15, 15, 0.82);
+    border-bottom: 1px solid var(--border);
+  }
+  nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 56px; }
+  .brand {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.06em;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .brand .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    flex: none;
+  }
+  .navlinks { display: flex; gap: 26px; font-family: var(--mono); font-size: 13px; }
+  .navlinks a { text-decoration: none; color: var(--text-muted); transition: color .15s; }
+  .navlinks a:hover { color: var(--accent); }
+  .navlinks .gh {
+    color: var(--text);
+    border: 1px solid var(--border-bright);
+    padding: 6px 12px;
+    border-radius: var(--radius);
+  }
+  .navlinks .gh:hover { border-color: var(--accent); color: var(--accent); }
+  @media (max-width: 640px) { .navlinks span { display: none; } }
+
+  /* ---------- hero ---------- */
+  .hero { padding: 88px 0 72px; position: relative; overflow: hidden; }
+  .hero-grid {
+    position: absolute;
+    top: 50%; right: -40px;
+    transform: translateY(-50%);
+    opacity: 0.9;
+    pointer-events: none;
+  }
+  @media (max-width: 900px) { .hero-grid { display: none; } }
+
+  .hero h1 {
+    font-size: clamp(40px, 6.4vw, 74px);
+    line-height: 0.98;
+    margin-top: 22px;
+    max-width: 14ch;
+  }
+  .hero h1 em {
+    font-style: normal;
+    color: var(--accent);
+  }
+  .hero-sub {
+    font-size: 19px;
+    color: var(--text-muted);
+    max-width: 52ch;
+    margin: 22px 0 0;
+  }
+  .hero-cta { display: flex; gap: 14px; margin-top: 36px; flex-wrap: wrap; }
+  .btn {
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 0.03em;
+    padding: 12px 20px;
+    border-radius: var(--radius);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: transform .12s, border-color .15s, background .15s, color .15s;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn-primary { background: var(--accent); color: #04211a; font-weight: 700; }
+  .btn-primary:hover { background: #63f0d0; }
+  .btn-ghost { border-color: var(--border-bright); color: var(--text); background: transparent; }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+  .hero-stats {
+    display: grid;
+    grid-template-columns: repeat(4, auto);
+    gap: 36px;
+    margin-top: 64px;
+    font-family: var(--mono);
+  }
+  @media (max-width: 720px) { .hero-stats { grid-template-columns: repeat(2, auto); } }
+  .stat-num { font-size: 26px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .stat-label { font-size: 11px; color: var(--text-dim); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 4px; }
+
+  /* ---------- plain-english cards ---------- */
+  .explain-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    margin-top: 48px;
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  @media (max-width: 820px) { .explain-grid { grid-template-columns: 1fr; } }
+  .explain-card {
+    background: var(--bg-panel);
+    padding: 30px 28px;
+  }
+  .explain-icon {
+    width: 40px; height: 40px;
+    display: grid;
+    place-items: center;
+    margin-bottom: 18px;
+  }
+  .explain-card h3 { font-size: 17px; font-weight: 700; }
+  .explain-card p { color: var(--text-muted); font-size: 14.5px; margin: 10px 0 0; }
+
+  /* mini icon: stacked layers */
+  .icon-layers { display: flex; flex-direction: column; gap: 4px; }
+  .icon-layers i { display: block; width: 32px; height: 6px; background: var(--accent-dim); border-radius: 1px; }
+  .icon-layers i:nth-child(1) { width: 32px; background: var(--accent); }
+  .icon-layers i:nth-child(2) { width: 24px; }
+  .icon-layers i:nth-child(3) { width: 16px; }
+  /* mini icon: grid of dots (systolic array) */
+  .icon-array { display: grid; grid-template-columns: repeat(4, 7px); gap: 3px; }
+  .icon-array i { width: 7px; height: 7px; background: var(--accent-dim); border-radius: 1px; }
+  .icon-array i.on { background: var(--accent); }
+  /* mini icon: arrows in/out */
+  .icon-flow { font-family: var(--mono); color: var(--accent); font-size: 20px; letter-spacing: 2px; }
+
+  /* ---------- diagram ---------- */
+  .diagram-section { background: var(--bg-panel-3); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .diagram-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; margin-top: 14px; }
+
+  .run-btn {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-bright);
+    color: var(--text);
+    padding: 11px 18px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: border-color .15s, color .15s;
+  }
+  .run-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .run-btn .play { color: var(--accent); }
+
+  .diagram-stage {
+    margin-top: 40px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+  .diagram-canvas {
+    position: relative;
+    width: 1050px;
+    margin: 0 auto;
+    height: 560px;
+  }
+  svg.wires { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  svg.wires path {
+    fill: none;
+    stroke: var(--border-bright);
+    stroke-width: 1.5;
+    transition: stroke .25s, stroke-width .25s, filter .25s;
+  }
+  svg.wires path.lit {
+    stroke: var(--accent);
+    stroke-width: 2.25;
+    filter: drop-shadow(0 0 5px rgba(var(--accent-rgb), .7));
+  }
+  svg.wires path.pulse {
+    stroke-dasharray: 6 8;
+    animation: dash 0.7s linear infinite;
+  }
+  @keyframes dash { to { stroke-dashoffset: -14; } }
+
+  .node {
+    position: absolute;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-bright);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    cursor: pointer;
+    width: 168px;
+    transition: border-color .2s, box-shadow .2s, transform .15s, background .2s;
+    user-select: none;
+  }
+  .node:hover { transform: translateY(-2px); border-color: var(--accent-dim); }
+  .node .node-label {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  .node .node-title { font-weight: 700; font-size: 14.5px; margin-top: 4px; }
+  .node.active {
+    border-color: var(--accent);
+    background: var(--bg-panel-2);
+    box-shadow: 0 0 0 1px var(--accent), 0 0 24px rgba(var(--accent-rgb), .25);
+  }
+  .node.active .node-label { color: var(--accent); }
+  .node.selected { border-color: var(--accent); }
+  .node.watch { border-style: dashed; }
+  .node.watch.active { border-style: solid; border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber), 0 0 24px rgba(var(--amber-rgb), .3); }
+  .node.watch.active .node-label { color: var(--amber); }
+
+  .n-host      { left: 0;    top: 250px; }
+  .n-cp        { left: 200px; top: 250px; }
+  .n-sched     { left: 400px; top: 250px; }
+  .n-dma       { left: 620px; top: 90px; }
+  .n-mem       { left: 850px; top: 90px; }
+  .n-me        { left: 620px; top: 410px; }
+  .n-mon       { left: 400px; top: 60px; width: 168px; }
+
+  .diagram-caption {
+    margin-top: 28px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 18px 22px;
+    min-height: 78px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+  }
+  .diagram-caption .step-tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    border: 1px solid var(--accent-dim);
+    padding: 3px 8px;
+    border-radius: var(--radius);
+    white-space: nowrap;
+  }
+  .diagram-caption p { margin: 0; color: var(--text-muted); font-size: 14.5px; }
+  .diagram-caption p strong { color: var(--text); font-weight: 600; }
+
+  .step-dots { display: flex; gap: 8px; margin-top: 18px; }
+  .step-dot {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    border-radius: var(--radius);
+    cursor: pointer;
+  }
+  .step-dot.active { color: var(--accent); border-color: var(--accent); }
+
+  .node-info {
+    margin-top: 28px;
+    font-size: 14px;
+    color: var(--text-muted);
+    max-width: 68ch;
+  }
+  .node-info strong { color: var(--text); }
+
+  /* ---------- trust / verification ---------- */
+  .trust-grid {
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 56px;
+    margin-top: 48px;
+    align-items: start;
+  }
+  @media (max-width: 900px) { .trust-grid { grid-template-columns: 1fr; } }
+
+  .bug-list { display: flex; flex-direction: column; gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .bug-row { background: var(--bg-panel); padding: 14px 18px; display: grid; grid-template-columns: 40px 1fr; gap: 14px; align-items: start; }
+  .bug-id { font-family: var(--mono); color: var(--amber); font-size: 13px; font-weight: 700; padding-top: 1px; }
+  .bug-row h4 { margin: 0; font-size: 14px; font-weight: 700; }
+  .bug-row p { margin: 4px 0 0; font-size: 13px; color: var(--text-muted); }
+  .bug-row .caught { font-family: var(--mono); font-size: 11px; color: var(--accent); margin-top: 6px; display: inline-block; }
+
+  .metric-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    margin-bottom: 1px;
+  }
+  .metric-card .n { font-family: var(--mono); font-size: 30px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .metric-card .l { font-size: 13px; color: var(--text-muted); margin-top: 6px; }
+  .toolchain-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+  .toolchain-tags span {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    padding: 5px 10px;
+    border-radius: var(--radius);
+  }
+
+  /* ---------- spec sheet ---------- */
+  .spec-table { width: 100%; border-collapse: collapse; margin-top: 40px; font-family: var(--mono); font-size: 13.5px; }
+  .spec-table th { text-align: left; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-dim); font-weight: 500; padding: 0 0 12px; border-bottom: 1px solid var(--border-bright); }
+  .spec-table td { padding: 13px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .spec-table td:first-child { color: var(--text-muted); width: 34%; padding-right: 20px; }
+  .spec-table td:last-child { color: var(--text); }
+  .spec-wrap { overflow-x: auto; }
+  .spec-wrap table { min-width: 560px; }
+
+  /* ---------- footer ---------- */
+  footer { border-top: 1px solid var(--border); padding: 48px 0; }
+  .footer-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; font-family: var(--mono); font-size: 12.5px; color: var(--text-dim); }
+  .footer-row a { color: var(--text-muted); text-decoration: none; }
+  .footer-row a:hover { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#top"><span class="dot"></span>TPE / TENSOR PROCESSING ENGINE</a>
+    <div class="navlinks">
+      <a href="#how-it-works"><span>§</span> How it works</a>
+      <a href="#trust"><span>§</span> Verification</a>
+      <a href="#specs"><span>§</span> Specs</a>
+      <a class="gh" href="https://github.com/bhavanibedreshankar/tpe-tensor-processing-engine" target="_blank" rel="noopener">GitHub ↗</a>
+    </div>
+  </div>
+</nav>
+
+<div id="top"></div>
+
+<section class="hero">
+  <div class="wrap" style="position:relative;">
+    <div class="hero-grid" id="heroGrid" aria-hidden="true"></div>
+    <div class="eyebrow">OPEN-SOURCE RTL &middot; NO PAID EDA TOOLS</div>
+    <h1>A chip that does<br /><em>one thing</em>, extremely fast.</h1>
+    <p class="hero-sub">
+      TPE is a small AI accelerator, designed the way a real chip team builds one:
+      hardware description, a C++ reference model, and a verification harness that
+      tries — and catches itself — 7 real bugs on purpose. It multiplies matrices,
+      the operation underneath almost every neural network, using 256 tiny
+      calculators wired together so they all work at once.
+    </p>
+    <div class="hero-cta">
+      <a class="btn btn-primary" href="https://github.com/bhavanibedreshankar/tpe-tensor-processing-engine" target="_blank" rel="noopener">View source on GitHub</a>
+      <a class="btn btn-ghost" href="#how-it-works">See how it works ↓</a>
+    </div>
+    <div class="hero-stats">
+      <div><div class="stat-num">256</div><div class="stat-label">multiply-add units</div></div>
+      <div><div class="stat-num">7</div><div class="stat-label">blocks on chip</div></div>
+      <div><div class="stat-num">7</div><div class="stat-label">bugs caught on purpose</div></div>
+      <div><div class="stat-num">224</div><div class="stat-label">tests in final proof run</div></div>
+    </div>
+  </div>
+</section>
+
+<div class="wrap"><div class="rule"></div></div>
+
+<section id="plain-english">
+  <div class="wrap">
+    <div class="eyebrow">FOR EVERYONE, NOT JUST CHIP ENGINEERS</div>
+    <h2 class="section-title">What does it actually compute?</h2>
+    <p class="section-lede">
+      Almost everything a neural network does — recognizing an image, predicting the next
+      word — boils down to multiplying big grids of numbers together, over and over.
+      A general-purpose CPU does this one number at a time. TPE does it differently.
+    </p>
+
+    <div class="explain-grid">
+      <div class="explain-card">
+        <div class="explain-icon"><div class="icon-layers"><i></i><i></i><i></i></div></div>
+        <h3>Weights &amp; activations</h3>
+        <p>
+          <strong>Weights</strong> are the numbers a trained model learned. <strong>Activations</strong>
+          are the input flowing through it. Multiplying these two grids of numbers together
+          is the single most repeated operation in AI — this chip exists to do that one
+          operation as fast and efficiently as possible.
+        </p>
+      </div>
+      <div class="explain-card">
+        <div class="explain-icon">
+          <div class="icon-array">
+            <i class="on"></i><i></i><i></i><i class="on"></i>
+            <i></i><i class="on"></i><i class="on"></i><i></i>
+            <i class="on"></i><i></i><i></i><i class="on"></i>
+            <i></i><i class="on"></i><i class="on"></i><i></i>
+          </div>
+        </div>
+        <h3>256 calculators, one grid</h3>
+        <p>
+          Instead of one fast calculator, TPE arranges 256 small ones in a 16×16 grid — a
+          <strong>systolic array</strong>. Numbers enter from the edges and pass from
+          neighbor to neighbor in lockstep, like a stadium crowd doing a wave, each one
+          doing a tiny multiply-and-add as the wave passes through.
+        </p>
+      </div>
+      <div class="explain-card">
+        <div class="explain-icon"><div class="icon-flow">→▦→</div></div>
+        <h3>Move data once, reuse it often</h3>
+        <p>
+          Fetching data from memory is slower and more power-hungry than doing math on it.
+          TPE loads a tile of weights into on-chip memory once, then streams activations
+          through it repeatedly — the same idea real accelerators use to stay fast without
+          burning power shuttling data back and forth.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="wrap"><div class="rule"></div></div>
+
+<section id="how-it-works" class="diagram-section">
+  <div class="wrap-wide">
+    <div class="diagram-head">
+      <div>
+        <div class="eyebrow">INTERACTIVE</div>
+        <h2 class="section-title">Follow a command through the chip</h2>
+        <p class="section-lede">
+          Click any block to read what it does, or press play and watch one real
+          command — <strong style="color:var(--text)">multiply two matrices and store the result</strong>
+          — move through the chip exactly like it does in simulation.
+        </p>
+      </div>
+      <button class="run-btn" id="runBtn"><span class="play">▶</span> Run a command</button>
+    </div>
+
+    <div class="diagram-stage">
+      <div class="diagram-canvas" id="canvas">
+        <svg class="wires" id="wires">
+          <path id="w-host-cp" d="M168,272 L200,272" />
+          <path id="w-cp-sched" d="M368,272 L400,272" />
+          <path id="w-sched-dma" d="M484,250 C484,190 560,150 620,130" />
+          <path id="w-dma-mem" d="M788,130 L850,130" />
+          <path id="w-sched-me" d="M484,294 C484,360 560,400 620,440" />
+          <path id="w-me-dma" d="M700,410 C740,350 740,220 700,150" />
+          <path id="w-sched-mon" d="M484,250 C484,190 484,160 484,122" />
+          <path id="w-mon-dma" d="M568,90 C590,90 600,95 620,102" />
+        </svg>
+
+        <div class="node" id="n-host" data-node="host" tabindex="0" role="button" aria-pressed="false">
+          <div class="node-label">01 · SOFTWARE</div>
+          <div class="node-title">Host</div>
+        </div>
+        <div class="node" id="n-cp" data-node="cp" tabindex="0" role="button" aria-pressed="false">
+          <div class="node-label">02 · FRONT DOOR</div>
+          <div class="node-title">Command Processor</div>
+        </div>
+        <div class="node" id="n-sched" data-node="sched" tabindex="0" role="button" aria-pressed="false">
+          <div class="node-label">03 · TRAFFIC CONTROL</div>
+          <div class="node-title">Scheduler</div>
+        </div>
+        <div class="node" id="n-dma" data-node="dma" tabindex="0" role="button" aria-pressed="false">
+          <div class="node-label">04 · DATA MOVER</div>
+          <div class="node-title">DMA Engine</div>
+        </div>
+        <div class="node" id="n-mem" data-node="mem" tabindex="0" role="button" aria-pressed="false">
+          <div class="node-label">05 · OFF-CHIP</div>
+          <div class="node-title">DRAM</div>
+        </div>
+        <div class="node" id="n-me" data-node="me" tabindex="0" role="button" aria-pressed="false">
+          <div class="node-label">06 · COMPUTE</div>
+          <div class="node-title">Matrix Engine</div>
+        </div>
+        <div class="node watch" id="n-mon" data-node="mon" tabindex="0" role="button" aria-pressed="false">
+          <div class="node-label">07 · ALWAYS WATCHING</div>
+          <div class="node-title">PMU + Debug</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="diagram-caption">
+      <span class="step-tag" id="stepTag">IDLE</span>
+      <p id="stepText">Click a block above to learn what it does, or press <strong>Run a command</strong> to watch data move through the whole chip.</p>
+    </div>
+
+    <div class="step-dots" id="stepDots"></div>
+
+    <p class="node-info" id="nodeInfo"></p>
+  </div>
+</section>
+
+<div class="wrap"><div class="rule"></div></div>
+
+<section id="trust">
+  <div class="wrap">
+    <div class="eyebrow">WHY TRUST A GRID OF WIRES</div>
+    <h2 class="section-title">Verified the way real chip teams do it</h2>
+    <p class="section-lede">
+      Writing hardware is easy to get subtly wrong — off-by-one row counts, a bit
+      flipped in the wrong direction, a timing race that only shows up once in a
+      hundred runs. So this project ships with <strong style="color:var(--text)">seven
+      real bugs, injected on purpose</strong>, and a test suite built specifically to
+      catch every one of them. If the tests ever stopped catching a bug, that itself
+      would be the red flag.
+    </p>
+
+    <div class="trust-grid">
+      <div class="bug-list">
+        <div class="bug-row">
+          <div class="bug-id">#1</div>
+          <div>
+            <h4>Systolic row off-by-one</h4>
+            <p>One extra row of the compute grid silently joins the sum when a tile doesn't use the full array.</p>
+            <span class="caught">caught by → random matrix-size testing</span>
+          </div>
+        </div>
+        <div class="bug-row">
+          <div class="bug-id">#2</div>
+          <div>
+            <h4>Misaligned accumulator seed</h4>
+            <p>Feeding a partial result back in picks up the wrong column's carried-over value.</p>
+            <span class="caught">caught by → nonzero accumulator testing</span>
+          </div>
+        </div>
+        <div class="bug-row">
+          <div class="bug-id">#3</div>
+          <div>
+            <h4>Asymmetric overflow clamp</h4>
+            <p>A result that overflows negative wraps around instead of saturating, while positive overflow works fine.</p>
+            <span class="caught">caught by → directed overflow test</span>
+          </div>
+        </div>
+        <div class="bug-row">
+          <div class="bug-id">#4</div>
+          <div>
+            <h4>Dropped final DMA burst</h4>
+            <p>A transfer whose last chunk is exactly one unit long silently never gets written.</p>
+            <span class="caught">caught by → multi-burst boundary test</span>
+          </div>
+        </div>
+        <div class="bug-row">
+          <div class="bug-id">#5</div>
+          <div>
+            <h4>Full-width tile rejected</h4>
+            <p>A matmul that exactly fills the compute grid is wrongly flagged as out of range.</p>
+            <span class="caught">caught by → exact-boundary test</span>
+          </div>
+        </div>
+        <div class="bug-row">
+          <div class="bug-id">#6</div>
+          <div>
+            <h4>Coupled interrupt flags</h4>
+            <p>Clearing one interrupt bit accidentally clears an unrelated one alongside it.</p>
+            <span class="caught">caught by → independent-clear test</span>
+          </div>
+        </div>
+        <div class="bug-row">
+          <div class="bug-id">#7</div>
+          <div>
+            <h4>Off-by-one cycle counter</h4>
+            <p>The performance monitor undercounts every command's latency by exactly one clock cycle.</p>
+            <span class="caught">caught by → hand-derived latency test</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="metric-card">
+          <div class="n">224</div>
+          <div class="l">test invocations in the final regression pass — zero infrastructure errors</div>
+        </div>
+        <div class="metric-card">
+          <div class="n">100%</div>
+          <div class="l">free &amp; open-source toolchain — no paid EDA licenses anywhere</div>
+        </div>
+        <div class="metric-card">
+          <div class="n">4</div>
+          <div class="l">test tiers — sanity, smoke, 100-test daily, 100-test random regression</div>
+        </div>
+        <div class="toolchain-tags">
+          <span>Verilator</span><span>Icarus Verilog</span><span>GTKWave</span>
+          <span>cocotb</span><span>pyuvm</span><span>cocotb-coverage</span>
+          <span>SystemVerilog Assertions</span><span>C++17 golden model</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="wrap"><div class="rule"></div></div>
+
+<section id="specs">
+  <div class="wrap">
+    <div class="eyebrow">FOR THE ENGINEERS</div>
+    <h2 class="section-title">Spec sheet</h2>
+    <div class="spec-wrap">
+      <table class="spec-table">
+        <thead><tr><th>Parameter</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td>Compute array</td><td>16 × 16 weight-stationary systolic array — 256 INT8 multiply-accumulate units</td></tr>
+          <tr><td>Numeric format</td><td>INT8 operands, INT32 accumulator (saturating)</td></tr>
+          <tr><td>Max tile size</td><td>256 × 256 × 256 per matmul instruction</td></tr>
+          <tr><td>On-chip scratchpad</td><td>64 KB (4096 × 128-bit rows), dual-port</td></tr>
+          <tr><td>Host interface</td><td>AXI4-Lite MMIO, 16-bit address / 32-bit data</td></tr>
+          <tr><td>Memory interface</td><td>AXI4, 128-bit data bus, burst-capable DMA</td></tr>
+          <tr><td>On-chip blocks</td><td>Command Processor · Scheduler · DMA Engine · Local SRAM · Matrix Compute Engine · PMU · Debug trace</td></tr>
+          <tr><td>Verification methodology</td><td>cocotb + pyuvm (class-based, UVM-equivalent) · SystemVerilog Assertions · line/toggle/branch + functional/FSM coverage</td></tr>
+          <tr><td>Reference model</td><td>C++17 golden model, cross-checked against RTL every test</td></tr>
+          <tr><td>License / cost</td><td>Fully open-source toolchain — Verilator, Icarus Verilog, GTKWave, cocotb, pyuvm</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="footer-row">
+      <span>TPE — Tensor Processing Engine · a from-scratch RTL project</span>
+      <a href="https://github.com/bhavanibedreshankar/tpe-tensor-processing-engine" target="_blank" rel="noopener">github.com/bhavanibedreshankar/tpe-tensor-processing-engine ↗</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------------- decorative systolic grid in hero ---------------- */
+  (function heroGrid() {
+    var el = document.getElementById("heroGrid");
+    var COLS = 8, ROWS = 8, SIZE = 15, GAP = 7;
+    var w = COLS * (SIZE + GAP), h = ROWS * (SIZE + GAP);
+    el.style.width = w + "px";
+    el.style.height = h + "px";
+    el.style.display = "grid";
+    el.style.gridTemplateColumns = "repeat(" + COLS + ", " + SIZE + "px)";
+    el.style.gap = GAP + "px";
+    var cells = [];
+    for (var r = 0; r < ROWS; r++) {
+      for (var c = 0; c < COLS; c++) {
+        var cell = document.createElement("div");
+        cell.style.width = SIZE + "px";
+        cell.style.height = SIZE + "px";
+        cell.style.borderRadius = "2px";
+        cell.style.background = "var(--accent-dim)";
+        cell.style.opacity = "0.35";
+        el.appendChild(cell);
+        cells.push({ el: cell, d: r + c });
+      }
+    }
+    if (reduceMotion) return;
+    var t = 0;
+    var period = (ROWS + COLS);
+    function tick() {
+      t = (t + 0.06) % period;
+      cells.forEach(function (cell) {
+        var dist = Math.abs(cell.d - t);
+        var lit = dist < 1.4;
+        cell.el.style.background = lit ? "var(--accent)" : "var(--accent-dim)";
+        cell.el.style.opacity = lit ? (1 - dist / 1.4).toFixed(2) : 0.28;
+        cell.el.style.boxShadow = lit ? "0 0 8px rgba(76,232,196,.6)" : "none";
+      });
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  })();
+
+  /* ---------------- diagram data ---------------- */
+  var NODE_INFO = {
+    host: "The <strong>host</strong> is ordinary software — a driver or test program — running on a CPU somewhere near the chip. It never touches memory or math directly; it just writes commands into a small register window and waits for an interrupt.",
+    cp: "The <strong>Command Processor</strong> is the chip's front door. It receives commands over a simple memory-mapped interface (AXI4-Lite), checks that they make sense, and queues them up for execution.",
+    sched: "The <strong>Scheduler</strong> pulls one command at a time off the queue and routes it to whichever engine needs to run it — the DMA engine for moving data, or the compute engine for math.",
+    dma: "The <strong>DMA Engine</strong> moves data in and out of off-chip memory in efficient bursts, without the host CPU babysitting every byte — the same technique used to keep any accelerator from being bottlenecked on memory bandwidth.",
+    mem: "<strong>DRAM</strong> is off-chip memory — plentiful but comparatively slow to reach. Weights, activations, and results all live here between operations; the chip only pulls in the slice it needs for the tile it's currently computing.",
+    me: "The <strong>Matrix Compute Engine</strong> is 256 multiply-accumulate units arranged in a 16×16 grid. Data flows in from two edges and every unit does one multiply-and-add per cycle, all 256 of them at once — this is what actually does the math.",
+    mon: "The <strong>Performance Monitor and Debug block</strong> watches silently: it counts cycles, tracks how long each command took, and keeps a trace of the last several commands and any errors — the chip's own flight recorder."
+  };
+
+  var STEPS = [
+    {
+      tag: "1 · LOAD WEIGHTS",
+      text: "The host tells the chip where the weight matrix lives in DRAM. The Scheduler dispatches the DMA engine, which streams it in over efficient memory bursts.",
+      lit: ["w-host-cp", "w-cp-sched", "w-sched-dma", "w-dma-mem"],
+      active: ["host", "cp", "sched", "dma", "mem"]
+    },
+    {
+      tag: "2 · LOAD ACTIVATIONS",
+      text: "Same path, same mechanism — this time for the activation matrix, the actual input data about to be multiplied.",
+      lit: ["w-host-cp", "w-cp-sched", "w-sched-dma", "w-dma-mem"],
+      active: ["host", "cp", "sched", "dma", "mem"]
+    },
+    {
+      tag: "3 · MULTIPLY",
+      text: "The Scheduler starts the Matrix Compute Engine. 256 multiply-accumulate units, wired in a 16×16 grid, compute the product in lockstep — this is the systolic array.",
+      lit: ["w-sched-me"],
+      active: ["sched", "me"]
+    },
+    {
+      tag: "4 · STORE RESULT",
+      text: "The result streams back out through the DMA engine to DRAM — the same path data came in on, just running the other direction.",
+      lit: ["w-me-dma", "w-dma-mem", "w-sched-dma"],
+      active: ["me", "dma", "mem", "sched"]
+    },
+    {
+      tag: "5 · DONE",
+      text: "The Command Processor raises an interrupt; the host reads back a status register. The whole time, the Scheduler was reporting every step to PMU + Debug, which recorded how long each one took.",
+      lit: ["w-host-cp", "w-sched-mon"],
+      active: ["cp", "host", "mon", "sched"]
+    }
+  ];
+
+  var nodes = {};
+  ["host", "cp", "sched", "dma", "mem", "me", "mon"].forEach(function (id) {
+    nodes[id] = document.getElementById("n-" + id);
+  });
+  var wires = {};
+  Array.prototype.forEach.call(document.querySelectorAll("svg.wires path"), function (p) {
+    wires[p.id] = p;
+  });
+
+  var stepTag = document.getElementById("stepTag");
+  var stepText = document.getElementById("stepText");
+  var nodeInfo = document.getElementById("nodeInfo");
+  var stepDotsEl = document.getElementById("stepDots");
+  var runBtn = document.getElementById("runBtn");
+
+  function clearAll() {
+    Object.keys(nodes).forEach(function (k) { nodes[k].classList.remove("active"); });
+    Object.keys(wires).forEach(function (k) { wires[k].classList.remove("lit", "pulse"); });
+  }
+
+  function showStep(i) {
+    clearAll();
+    var s = STEPS[i];
+    stepTag.textContent = s.tag;
+    stepText.innerHTML = s.text;
+    s.active.forEach(function (id) { if (nodes[id]) nodes[id].classList.add("active"); });
+    s.lit.forEach(function (id) { if (wires[id]) wires[id].classList.add("lit", "pulse"); });
+    Array.prototype.forEach.call(stepDotsEl.children, function (d, idx) {
+      d.classList.toggle("active", idx === i);
+    });
+  }
+
+  STEPS.forEach(function (s, i) {
+    var dot = document.createElement("button");
+    dot.className = "step-dot";
+    dot.type = "button";
+    dot.textContent = s.tag;
+    dot.addEventListener("click", function () { stopPlay(); showStep(i); });
+    stepDotsEl.appendChild(dot);
+  });
+
+  var playing = null, playIndex = 0;
+  function stopPlay() {
+    if (playing) { clearInterval(playing); playing = null; }
+    runBtn.innerHTML = '<span class="play">▶</span> Run a command';
+  }
+  function startPlay() {
+    playIndex = 0;
+    showStep(0);
+    runBtn.innerHTML = '<span class="play">■</span> Stop';
+    if (reduceMotion) return;
+    playing = setInterval(function () {
+      playIndex = (playIndex + 1) % STEPS.length;
+      showStep(playIndex);
+      if (playIndex === STEPS.length - 1) {
+        setTimeout(stopPlay, 2200);
+      }
+    }, 2200);
+  }
+  runBtn.addEventListener("click", function () {
+    if (playing) { stopPlay(); clearAll(); stepTag.textContent = "IDLE"; stepText.textContent = "Click a block above to learn what it does, or press Run a command to watch data move through the whole chip."; Array.prototype.forEach.call(stepDotsEl.children, function (d) { d.classList.remove("active"); }); }
+    else startPlay();
+  });
+
+  function selectNode(id) {
+    stopPlay();
+    clearAll();
+    nodes[id].classList.add("active");
+    nodeInfo.innerHTML = NODE_INFO[id];
+    stepTag.textContent = nodes[id].querySelector(".node-title").textContent.toUpperCase();
+    stepText.innerHTML = NODE_INFO[id];
+  }
+  Object.keys(nodes).forEach(function (id) {
+    nodes[id].addEventListener("click", function () { selectNode(id); });
+    nodes[id].addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectNode(id); }
+    });
+  });
+
+  nodeInfo.innerHTML = "Select any block to see its role, or press <strong>Run a command</strong> above to watch a full load → multiply → store sequence.";
+})();
+</script>
+
+</body>
+</html>
