@@ -195,6 +195,7 @@ Makefile         top-level entry point; wraps everything above
 
 ## Documentation index
 
+- [Handbook](docs/HANDBOOK.md) -- every command in this project's flow, one line each
 - [Architecture spec](docs/architecture/tpe_architecture_spec.md) -- blocks, interfaces, parameters
 - [Register map](docs/register_map/generated/register_map.md) (generated -- edit [`tpe_regs.yaml`](docs/register_map/tpe_regs.yaml) instead)
 - [Verification test plan](docs/verification/test_plan.md)
