@@ -12,16 +12,12 @@ is required; `run_sim` just orchestrates it.
 
 `make -C verif/cocotb_tb/<dir> TESTCASE=<test>` writes `sim_build/`,
 `results.xml`, `dump.vcd`, `coverage.dat`, `<dir>_scoreboard_work/` and
-`__pycache__` straight into that block's source directory. They're
-gitignored, but they still clutter `verif/cocotb_tb/<dir>/` while you
-work. `run_sim` redirects everything it can (`SIM_BUILD`,
-`COCOTB_RESULTS_FILE`, the trace/coverage file paths are all make-variable
-overrides the per-block Makefiles already respect) and sweeps up the rest
-(scoreboard work dirs, sram's `coverage.xml`, `__pycache__` -- these are
-hardcoded relative `Path("...")` names inside each block's
-`scoreboard.py`/`coverage.py` and can't be redirected) into one place
-under `$WORK_DIR`, so `verif/cocotb_tb/<dir>/` is clean before and after
-every run.
+`__pycache__` straight into that block's source directory, and fully
+recompiles the Verilator binary on every single invocation regardless of
+whether any RTL changed (see section 8). `run_sim` fixes both: every
+generated file lands under `$WORK_DIR` instead of the source tree, and a
+block's compiled binary is built once and reused by every test that
+targets it.
 
 ## 2. Setup
 
@@ -34,43 +30,113 @@ make venv          # first time only
 .venv/bin/activate` isn't required -- but `env.sh` is worth sourcing for
 `WORK_DIR` (falls back to `sim/logs/adhoc` if unset).
 
-## 3. Directory layout
+## 3. The pipeline: four stages, each with its own directory
+
+Running a test is split into four independently-tracked stages instead of
+one monolithic `make` call:
+
+| Stage | What it does | Scope | Directory |
+|---|---|---|---|
+| `filelist` | Resolves the block's `VERILOG_SOURCES`/`EXTRA_ARGS`/`TOPLEVEL`/`MODULE` (`make -p -n` against its Makefile) and hashes the source content | per block, cached | `_cache/<dir>/filelist/` |
+| `model_build` | `make -C model` -- the C++ golden model the scoreboards shell out to at runtime | global, one instance | `_cache/model_build/` |
+| `compile` | `verilator -cc --exe` + C++ build → the block's `Vtop` binary | per block, **shared/reused** across every test targeting that block | `_cache/<dir>/compile/` |
+| `rtl_sim` | Runs the compiled `Vtop` binary against one `TESTCASE`/seed | per test | `<tag>/rtl_sim/` |
+
+Every stage writes a `status.json` (state/timing/cached-or-not) to its own
+directory as it runs -- see `-monitor` (section 6) to read them back.
+
+## 4. Why compile is reusable, and why rtl_sim bypasses make
+
+The obvious way to reuse a compile is to point `SIM_BUILD` at a directory
+that persists across test runs and let Verilator's own incremental `-Mdir`
+compile skip regenerating anything unchanged. That works correctly on a
+normal filesystem -- confirmed empirically it does *not* work reliably
+inside this sandbox, because the project directory's mount doesn't
+preserve the sub-second mtime precision Verilator's incremental check
+depends on (identical repeated compiles against `/tmp` correctly no-op;
+the identical repeated compile against a directory under this repo's own
+tree never did, redoing the full ~7s build every time).
+
+So `run_sim` doesn't trust that mechanism:
+
+- `filelist` computes a SHA-256 hash of the block's actual source file
+  *content* (plus `EXTRA_ARGS`/`TOPLEVEL`/`MODULE`) -- filesystem-mtime
+  independent.
+- `compile` compares that hash against the one recorded next to the last
+  successful build (`_cache/<dir>/compile/built_hash.txt`) and **skips
+  invoking `make` entirely** when they match, rather than invoking make
+  and hoping it/Verilator no-ops quickly.
+- `rtl_sim` then runs the resulting `Vtop` binary **directly** (not via
+  `make -C block_dir` again). This matters even when the hash says
+  "unchanged": any `make` invocation that re-evaluates `Vtop.mk`'s rule
+  re-triggers `verilator -cc`, because that recipe has a phony `model`
+  prerequisite (`verif/cocotb_tb/*/Makefile`) and GNU Make always re-runs
+  a target's recipe when a phony prerequisite is remade. On a filesystem
+  with reliable mtimes that's a harmless ~1-2s no-op re-verify; on this
+  one it's a full rebuild -- so `rtl_sim` never gives Make the chance,
+  replicating just the env vars/argv the Makefile recipe would otherwise
+  set (`MODULE`/`TESTCASE`/`TOPLEVEL`/`TOPLEVEL_LANG`/
+  `COCOTB_RESULTS_FILE`/`LIBPYTHON_LOC`/`PYTHONPATH`, `cwd=block_dir`),
+  using the `TOPLEVEL`/`MODULE`/`EXTRA_ARGS` the `filelist` stage already
+  resolved.
+
+Net effect, measured on this repo: `dma_sanity_test` cold (nothing built
+yet) takes ~10s; every subsequent test against `dma` -- the same test
+again, or a different one, in the same run or a later `run_sim`
+invocation -- takes ~0.2-0.4s, because `compile` reports `cached` and
+`rtl_sim` never touches Make. `-clean -block <dir>` (section 6) forces the
+next test against that block to rebuild for real.
+
+## 5. Directory layout
 
 ```
 $WORK_DIR/<work-dir-name, default "WORK">/
-├── <dir>.<test>[.seed<N>]/            # one --test run
-│   ├── sim_build/                     # this run's Verilator build
-│   │   ├── coverage.dat               # always produced (every block Makefile hardcodes
-│   │   │                              # --coverage-line/-toggle/-user, see section 8) but left
-│   │   │                              # buried here unless -coverage was passed
-│   │   └── dump.vcd                   # always traced (--trace/--trace-structs, same story) but
-│   │                                  # left buried here unless -waves was passed
-│   ├── results.xml                    # cocotb JUnit for this test
-│   ├── run.log                        # full make stdout/stderr
-│   ├── <dir>_scoreboard_work/         # swept out of the source tree
-│   ├── dump.vcd                       # only surfaced here if -waves was passed
-│   └── coverage/                      # only created if -coverage was passed
-│       ├── coverage.dat               # copy of sim_build/coverage.dat, surfaced at top level
-│       ├── <tag>.dat
-│       ├── merged_coverage.dat
-│       └── coverage_summary.txt
-└── <suite>/                           # one --suite run
-    ├── <dir>.<test>[.seed<N>]/        # same per-test contents as above (-waves isn't
-    │                                  # valid with -suite, so dump.vcd always stays buried)
-    ├── regression.xml                 # aggregate JUnit
-    └── coverage/                      # only created if -coverage was passed, shared
-        ├── <tag>.dat                  # across every test in the suite
+├── _cache/                                 # shared, reused across every run
+│   ├── model_build/
+│   │   ├── status.json
+│   │   └── build.log
+│   └── <dir>/
+│       ├── filelist/
+│       │   ├── status.json
+│       │   ├── sources.txt
+│       │   ├── vars.json           # TOPLEVEL/MODULE/EXTRA_ARGS
+│       │   └── hash.txt
+│       └── compile/
+│           ├── status.json
+│           ├── build.log
+│           ├── built_hash.txt      # hash this sim_build/ was last built from
+│           └── sim_build/          # the compiled Vtop binary -- shared/reused
+├── <dir>.<test>[.seed<N>]/                 # one --test run
+│   └── rtl_sim/
+│       ├── status.json
+│       ├── results.xml
+│       ├── run.log
+│       ├── dump.vcd                # only kept here if -waves was passed, else deleted
+│       ├── coverage.dat            # only kept here if -coverage was passed, else deleted
+│       ├── <dir>_scoreboard_work/  # swept out of the source tree
+│       └── coverage/               # only created if -coverage was passed
+│           ├── coverage.dat
+│           ├── <tag>.dat
+│           ├── merged_coverage.dat
+│           └── coverage_summary.txt
+└── <suite>/                                # one --suite run
+    ├── <dir>.<test>[.seed<N>]/rtl_sim/     # same per-test contents as above
+    ├── regression.xml                      # aggregate JUnit
+    └── coverage/                           # only if -coverage was passed, shared
+        ├── <tag>.dat                       # across every test in the suite
         ├── merged_coverage.dat
         └── coverage_summary.txt
 ```
 
 `<tag>` is `"<dir>.<test>"`, plus `.seed<N>` when a seed is set -- same
 naming convention `tools/regression.py` uses under `sim/logs/<suite>/`.
-Nothing under `verif/cocotb_tb/` is ever written to, and nothing
-coverage- or waveform-related shows up above `sim_build/` unless
-`-coverage`/`-waves` is passed -- see section 8.
+Nothing under `verif/cocotb_tb/` is ever written to. `coverage.dat`/
+`dump.vcd` are always produced by the simulator regardless of flags
+(every block Makefile hardcodes coverage instrumentation and tracing at
+compile time, see [`build_flow.md`](build_flow.md) section 4) -- without
+`-coverage`/`-waves` they're deleted right after the run instead of kept.
 
-## 4. Options
+## 6. Options
 
 Every option accepts both a single- and double-dash spelling
 (`-test`/`--test`, etc.) -- pick whichever reads better.
@@ -82,17 +148,19 @@ Every option accepts both a single- and double-dash spelling
 | `-seed N` | `TPE_SEED` override, only meaningful with `-test` on a `kind: random` entry. Suite entries carry their own per-test seed from the testlist YAML -- `-seed` doesn't apply there. |
 | `-jobs N` | Max concurrent block directories for `-suite` (default: `nproc`). Tests within the same block directory always run sequentially -- see [`regression_flow.md`](regression_flow.md) section 2 for why. |
 | `-timeout N` | Per-test timeout in seconds (default 120). |
-| `-farm` | Runs the same local parallel execution as a plain `-suite` run; today this is a naming placeholder only (no remote scheduler wired up), see section 7. |
-| `-coverage` | After the run, merge/report coverage via `tools/cov_merge.py` (imported directly, not subprocessed) -- works with `-test` or `-suite`. |
+| `-farm` | Runs the same local parallel execution as a plain `-suite` run; today this is a naming placeholder only (no remote scheduler wired up), see section 8. |
+| `-coverage` | Keep this run's `coverage.dat` and merge/report it via `tools/cov_merge.py` (imported directly, not subprocessed) -- works with `-test` or `-suite`. |
 | `-annotate` | With `-coverage`, also write a per-source annotated report (`verilator_coverage --annotate`). |
 | `-lint` | Runs `tools/lint.py` (`verilator --lint-only` across `rtl/`). Independent of `-test`/`-suite`. |
-| `-block NAME` | With `-lint`, lint only that block. |
-| `-waves` | Opens GTKWave on the run's `dump.vcd` afterward. Requires `-test` (ambiguous which test's waves to open for a `-suite`). |
-| `-clean` | Removes work dirs under `$WORK_DIR/<work-dir-name>`. Scope with `-test NAME` (that test's dir only) or `-suite NAME` (that suite's whole subtree); with neither, wipes everything under the work-dir-name root. |
+| `-block NAME` | With `-lint`, lint only that block. With `-clean`, remove only that block's `_cache/` entry (forces its next compile to rebuild for real). |
+| `-waves` | Keep this run's `dump.vcd` and open it in GTKWave afterward. Requires `-test` (ambiguous which test's waves to open for a `-suite`). |
+| `-clean` | Removes work dirs under `$WORK_DIR/<work-dir-name>`. Scope with `-test NAME` (that test's dir only), `-suite NAME` (that suite's whole subtree), or `-block NAME` (just that block's compile cache); with none of those, wipes everything under the work-dir-name root, including `_cache/`. |
+| `-monitor` | Prints the state (`RUNNING`/`PASS`/`FAIL`/`DONE`/`ERROR`/`TIMEOUT`), duration, and cached-or-not of every stage's `status.json` found under the work root, then exits. |
+| `-watch` | With `-monitor`, re-polls every 2s (Ctrl-C to stop) instead of a single snapshot -- run it in a second terminal alongside a live `-test`/`-suite` run to watch stages progress. |
 | `-list` | Prints every test in `verif/testlists/standalone.yaml` (name, block dir, kind, `expect_fail`) and exits. |
 | `-work-dir-name NAME` | Overrides the top-level dir name under `$WORK_DIR` (default `WORK`). |
 
-## 5. Examples
+## 7. Examples
 
 ```
 ./run_sim -test dma_sanity_test
@@ -101,12 +169,15 @@ Every option accepts both a single- and double-dash spelling
 ./run_sim -suite smoke -jobs 8 -coverage -annotate
 ./run_sim -suite daily -farm
 ./run_sim -lint -block tpe_dma
+./run_sim -monitor                                      # snapshot of every stage's last state
+./run_sim -monitor -watch                               # live, in a second terminal
 ./run_sim -clean -suite smoke
-./run_sim -clean                                        # wipe every work dir
+./run_sim -clean -block dma                             # force dma's next compile to rebuild
+./run_sim -clean                                        # wipe every work dir, including _cache/
 ./run_sim -list
 ```
 
-## 6. Exit codes
+## 8. Exit codes
 
 - `-test`: `0` if the test's status is `PASS`, `1` otherwise (`FAIL`,
   `ERROR`, or `TIMEOUT`). If the test has an `expect_fail` note in
@@ -115,59 +186,32 @@ Every option accepts both a single- and double-dash spelling
   useful for ad hoc debugging, where you want a straight pass/fail signal
   for the one test you're looking at.
 - `-suite`: matches `tools/regression.py`'s philosophy -- `0` unless a
-  test `ERROR`ed or `TIMEOUT`'d (an infrastructure failure). A `FAIL`
-  against a catalogued bug is expected across a whole tier and does not
-  fail the run; cross-check the printed summary against `bug_list.md`
-  before treating a `FAIL` as a regression.
+  test `ERROR`ed or `TIMEOUT`'d (an infrastructure failure, which includes
+  a `compile` stage failure). A `FAIL` against a catalogued bug is
+  expected across a whole tier and does not fail the run; cross-check the
+  printed summary against `bug_list.md` before treating a `FAIL` as a
+  regression.
 
-## 7. What `-farm` actually does today
+## 9. What `-farm` actually does today
 
 There's no compute farm (LSF/Slurm/Jenkins agents) wired up in this
 project -- `-farm` runs identically to a plain `-suite` run (the same
 `ThreadPoolExecutor`-based local parallelism `tools/regression.py` uses,
 see [`regression_flow.md`](regression_flow.md)'s "Why this instead of a
 real job scheduler" section). It exists as a CLI placeholder so the
-interface doesn't need to change if a real scheduler gets wired in later
--- swap the `subprocess.run(["make", ...])` call in `run_one()`
-(`tools/run_sim.py`) for a submission call and everything upstream
-(test resolution, work-dir layout, coverage merge) stays the same.
+interface doesn't need to change if a real scheduler gets wired in later.
 
-## 8. Why `-coverage`/`-waves` don't fully suppress coverage.dat/dump.vcd
+## 10. A gotcha worth knowing if you extend this
 
-Every block Makefile hardcodes `--trace --trace-structs` in addition to
-`--coverage-line --coverage-toggle --coverage-user`
-([`build_flow.md`](build_flow.md) section 4) at compile time, so Verilator
-always traces (produces a `dump.vcd`) the same way it always instruments
-coverage -- `run_sim` doesn't control either, only where the file lands.
-Without `-waves`, `dump.vcd` is redirected into `sim_build/dump.vcd` and
-left there; with `-waves`, it's redirected to the top level of the result
-dir and opened in GTKWave once the run finishes.
-
-Every block Makefile hardcodes `--coverage-line --coverage-toggle
---coverage-user` ([`build_flow.md`](build_flow.md) section 4) at compile
-time, so Verilator always instruments and writes a `coverage.dat`
-regardless of whether you asked for it -- `run_sim` doesn't control that,
-only where the file lands. Without `-coverage`, it's redirected into
-`sim_build/coverage.dat` (an already-expected build-scratch location) and
-otherwise ignored: no top-level `coverage.dat`, no `coverage/` dir, no
-merge/report. With `-coverage`, it's redirected to the top level of the
-result dir instead, and copied into `coverage/<tag>.dat` for
-`tools/cov_merge.py` to merge/summarize. Same story for sram's TB-side
-`sram_coverage.xml` (produced unconditionally by
-`verif/cocotb_tb/sram/coverage.py`, swept out of the source tree either
-way -- kept under `coverage/` only when `-coverage` is passed, discarded
-otherwise).
-
-## 9. A gotcha worth knowing if you extend this
-
-`SIM_BUILD`, unlike `COCOTB_RESULTS_FILE`/`SIM_ARGS`/`PLUSARGS`, can't be
-redirected via an environment variable -- every block's Makefile has
-`SIM_BUILD := sim_build` (a hard assignment, see
+`SIM_BUILD`, unlike `COCOTB_RESULTS_FILE`, can't be redirected via a plain
+environment variable when going through `make` -- every block's Makefile
+has `SIM_BUILD := sim_build` (a hard assignment, see
 `verif/cocotb_tb/*/Makefile`), which silently overrides anything supplied
 through the environment (`:=` doesn't defer to it the way cocotb's own
-`SIM_BUILD ?= sim_build` default does). `tools/run_sim.py` passes all of
-`TESTCASE`/`SIM_BUILD`/`COCOTB_RESULTS_FILE`/`SIM_ARGS`/`PLUSARGS`/
-`TPE_SEED` as `make VAR=value` command-line overrides instead, uniformly
--- those beat any in-Makefile assignment regardless of `:=`/`=`/`?=`. If
-you add a new redirected variable here, use the same command-line-override
-approach rather than env vars.
+`SIM_BUILD ?= sim_build` default does). `run_compile()`
+(`tools/run_sim.py`) passes it as a `make VAR=value` command-line
+override instead, which beats any in-Makefile assignment regardless of
+`:=`/`=`/`?=`. `run_rtl_sim()` sidesteps the whole question by not calling
+`make` at all (section 4) -- if you ever need to add a new block-Makefile
+variable to the `compile` stage specifically, use the same command-line
+override approach there.

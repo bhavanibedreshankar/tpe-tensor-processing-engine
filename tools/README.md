@@ -11,7 +11,7 @@
 | `profiler.py` | Per-test wall-clock profiling from a regression's results.json, outlier flagging | done (M6) |
 | `lint.py` | `verilator --lint-only` wrapper across every `rtl/` block + per-block waivers (source of truth for `make lint`) | done (M6) |
 | `waves.py` | Convenience GTKWave launcher for a given block's last waveform dump | done (M6) |
-| `run_sim.py` | Unified test orchestrator (`../run_sim` at repo root) -- resolves a test name to its block dir, runs single tests/suites/coverage/lint/waves/clean, redirects every generated file under `$WORK_DIR` so `verif/cocotb_tb/<dir>/` stays clean; sits alongside everything above, doesn't replace it | done |
+| `run_sim.py` | Unified test orchestrator (`../run_sim` at repo root) -- resolves a test name to its block dir, splits a run into filelist/model_build/compile/rtl_sim stages (each its own cached directory under `$WORK_DIR`, a block's compile is reused across every test targeting it), plus suites/coverage/lint/waves/clean/`-monitor`; sits alongside everything above, doesn't replace it | done |
 
 See [`docs/flows/regression_flow.md`](../docs/flows/regression_flow.md) for
 how these fit together (testlists -> regression -> coverage/profiling).
