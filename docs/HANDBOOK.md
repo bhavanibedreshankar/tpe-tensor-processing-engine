@@ -59,6 +59,13 @@ TESTCASE=<test> TPE_SEED=<seed> make -C verif/cocotb_tb/<block>       # ...with 
 make -C verif/cocotb_tb/<block> waves                                 # open that block's last dump.vcd
 make -C verif/cocotb_tb/<block> clean-all                             # wipe that block's build/sim artifacts
 ```
+Example:
+```
+TESTCASE=matmul_sanity_test make -C verif/cocotb_tb/matrix_engine
+TESTCASE=dma_random_test TPE_SEED=12345 make -C verif/cocotb_tb/dma
+make -C verif/cocotb_tb/dma waves
+make -C verif/cocotb_tb/dma clean-all
+```
 `<block>` = `sram` / `matrix_engine` / `dma` / `top` / `pmu` / `debug` /
 `smoke`. Full test catalog: [`verif/testlists/standalone.yaml`](../verif/testlists/standalone.yaml).
 
@@ -73,6 +80,8 @@ make daily                             # 100 tests, ~2 min
 make random                            # 100 tests, ~2 min
 python3 tools/regression.py <suite> --jobs N --timeout N   # direct, any suite name
 ```
+Example: `python3 tools/regression.py smoke --jobs 8 --timeout 120`
+
 Some `FAIL`s on smoke/daily/random are expected (7 catalogued bugs) --
 see [`docs/verification/bug_list.md`](verification/bug_list.md). Exit
 code only goes nonzero on `ERROR`/`TIMEOUT`.
@@ -126,4 +135,19 @@ git push -u origin main                                    # first push, sets up
 
 gh api -X POST repos/<owner>/<repo>/pages \
   -f "source[branch]=main" -f "source[path]=/docs"          # enable GitHub Pages from docs/
+```
+Example:
+```
+git config --global user.name "bhavanibedreshankar"
+git config --global user.email "bedreshankarbhavani@gmail.com"
+
+git add docs/HANDBOOK.md README.md
+git commit -m "Add a command handbook"
+git push
+
+gh repo create tpe-tensor-processing-engine --public --source=. --remote=origin
+git push -u origin main
+
+gh api -X POST repos/bhavanibedreshankar/tpe-tensor-processing-engine/pages \
+  -f "source[branch]=main" -f "source[path]=/docs"
 ```
