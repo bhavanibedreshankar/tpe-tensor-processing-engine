@@ -40,20 +40,23 @@ make venv          # first time only
 $WORK_DIR/<work-dir-name, default "WORK">/
 ├── <dir>.<test>[.seed<N>]/            # one --test run
 │   ├── sim_build/                     # this run's Verilator build
-│   │   └── coverage.dat               # always produced (every block Makefile hardcodes
-│   │                                  # --coverage-line/-toggle/-user, see section 8) but left
-│   │                                  # buried here unless -coverage was passed
+│   │   ├── coverage.dat               # always produced (every block Makefile hardcodes
+│   │   │                              # --coverage-line/-toggle/-user, see section 8) but left
+│   │   │                              # buried here unless -coverage was passed
+│   │   └── dump.vcd                   # always traced (--trace/--trace-structs, same story) but
+│   │                                  # left buried here unless -waves was passed
 │   ├── results.xml                    # cocotb JUnit for this test
-│   ├── dump.vcd
 │   ├── run.log                        # full make stdout/stderr
 │   ├── <dir>_scoreboard_work/         # swept out of the source tree
+│   ├── dump.vcd                       # only surfaced here if -waves was passed
 │   └── coverage/                      # only created if -coverage was passed
 │       ├── coverage.dat               # copy of sim_build/coverage.dat, surfaced at top level
 │       ├── <tag>.dat
 │       ├── merged_coverage.dat
 │       └── coverage_summary.txt
 └── <suite>/                           # one --suite run
-    ├── <dir>.<test>[.seed<N>]/        # same per-test contents as above
+    ├── <dir>.<test>[.seed<N>]/        # same per-test contents as above (-waves isn't
+    │                                  # valid with -suite, so dump.vcd always stays buried)
     ├── regression.xml                 # aggregate JUnit
     └── coverage/                      # only created if -coverage was passed, shared
         ├── <tag>.dat                  # across every test in the suite
@@ -64,8 +67,8 @@ $WORK_DIR/<work-dir-name, default "WORK">/
 `<tag>` is `"<dir>.<test>"`, plus `.seed<N>` when a seed is set -- same
 naming convention `tools/regression.py` uses under `sim/logs/<suite>/`.
 Nothing under `verif/cocotb_tb/` is ever written to, and nothing
-coverage-related shows up above `sim_build/` unless `-coverage` is passed
--- see section 8.
+coverage- or waveform-related shows up above `sim_build/` unless
+`-coverage`/`-waves` is passed -- see section 8.
 
 ## 4. Options
 
@@ -129,7 +132,16 @@ interface doesn't need to change if a real scheduler gets wired in later
 (`tools/run_sim.py`) for a submission call and everything upstream
 (test resolution, work-dir layout, coverage merge) stays the same.
 
-## 8. Why `-coverage` doesn't fully suppress coverage.dat
+## 8. Why `-coverage`/`-waves` don't fully suppress coverage.dat/dump.vcd
+
+Every block Makefile hardcodes `--trace --trace-structs` in addition to
+`--coverage-line --coverage-toggle --coverage-user`
+([`build_flow.md`](build_flow.md) section 4) at compile time, so Verilator
+always traces (produces a `dump.vcd`) the same way it always instruments
+coverage -- `run_sim` doesn't control either, only where the file lands.
+Without `-waves`, `dump.vcd` is redirected into `sim_build/dump.vcd` and
+left there; with `-waves`, it's redirected to the top level of the result
+dir and opened in GTKWave once the run finishes.
 
 Every block Makefile hardcodes `--coverage-line --coverage-toggle
 --coverage-user` ([`build_flow.md`](build_flow.md) section 4) at compile

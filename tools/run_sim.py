@@ -122,23 +122,25 @@ def sweep_generated(block_dir: Path, result_dir: Path, cov_root: Path, tag: str,
 
 
 def run_one(dir_: str, test: str, seed, result_dir: Path, timeout_s: int,
-            cov_root: Path = None, keep_coverage: bool = False) -> dict:
+            cov_root: Path = None, keep_coverage: bool = False, keep_waves: bool = False) -> dict:
     block_dir = REPO_ROOT / "verif" / "cocotb_tb" / dir_
     tag = tag_for(dir_, test, seed)
     result_dir.mkdir(parents=True, exist_ok=True)
     cov_root = cov_root or (result_dir / "coverage")
 
     results_xml = result_dir / "results.xml"
-    dump_vcd = result_dir / "dump.vcd"
     log_file = result_dir / "run.log"
-    # Every block Makefile hardcodes --coverage-line/-toggle/-user (see
-    # docs/flows/build_flow.md section 4), so Verilator always instruments
-    # and writes a coverage.dat regardless of -coverage -- run_sim can only
-    # choose where it lands, not whether it's produced. Without -coverage,
-    # tuck it inside sim_build (an already-expected build-scratch dir) so
-    # nothing coverage-related shows up in result_dir unless asked for.
+    # Every block Makefile hardcodes --coverage-line/-toggle/-user and
+    # --trace/--trace-structs (see docs/flows/build_flow.md section 4), so
+    # Verilator always instruments coverage and always traces regardless of
+    # -coverage/-waves -- run_sim can only choose where each file lands, not
+    # whether it's produced. Without the matching flag, tuck it inside
+    # sim_build (an already-expected build-scratch dir) so nothing shows up
+    # in result_dir unless actually asked for.
     coverage_dat = (result_dir / "coverage.dat") if keep_coverage \
         else (result_dir / "sim_build" / "coverage.dat")
+    dump_vcd = (result_dir / "dump.vcd") if keep_waves \
+        else (result_dir / "sim_build" / "dump.vcd")
 
     # Passed as `make VAR=value` command-line overrides, not env vars: every
     # block Makefile sets `SIM_BUILD := sim_build` (a hard assignment, see
@@ -263,7 +265,8 @@ def run_single_test(args) -> int:
              + (f" seed={args.seed}" if args.seed is not None else "")
              + f" -> {result_dir}")
 
-    r = run_one(entry["dir"], args.test, args.seed, result_dir, args.timeout, keep_coverage=args.coverage)
+    r = run_one(entry["dir"], args.test, args.seed, result_dir, args.timeout,
+                keep_coverage=args.coverage, keep_waves=args.waves)
     print(f"\n{r['tag']:<50} {r['status']:<8} {r['wall_s']:>8.2f}s")
     print(f"log: {r['log']}")
     if entry.get("expect_fail") and r["status"] == "FAIL":
