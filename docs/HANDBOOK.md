@@ -23,6 +23,37 @@ and resolves `VERILATOR`/`IVERILOG`/`GTKWAVE` to their absolute paths.
 Replaces the manual `source .venv/bin/activate` above when you also want
 a scratch dir and resolved tool paths for one-off commands/scripts.
 
+## run_sim (unified test orchestration)
+
+```
+./run_sim -test <test>                            # resolves the block dir itself, no -C needed
+./run_sim -test <test> -seed <seed>                # reproducible seed (random-kind tests only)
+./run_sim -test <test> -coverage -waves            # + coverage report + open GTKWave after
+./run_sim -suite <sanity|smoke|daily|random>       # run a whole tier
+./run_sim -suite <suite> -jobs N -coverage -farm   # parallel + merged coverage ("-farm" today
+                                                    # == local parallel, no remote scheduler wired up)
+./run_sim -lint [-block <name>]                    # tools/lint.py
+./run_sim -clean [-test <test>|-suite <suite>]     # wipe work dirs (everything if neither given)
+./run_sim -list                                    # every test in verif/testlists/standalone.yaml
+```
+Every generated file (`sim_build/`, `results.xml`, `dump.vcd`,
+`coverage.dat`, `<block>_scoreboard_work/`) lands under
+`$WORK_DIR/WORK/<dir>.<test>[.seed<N>]/` (single `-test`) or
+`$WORK_DIR/WORK/<suite>/<dir>.<test>[.seed<N>]/` (`-suite`) --
+`verif/cocotb_tb/<dir>/` is never touched. `source env.sh` first (sets
+`WORK_DIR`; falls back to `sim/logs/adhoc` otherwise). `-work-dir-name`
+overrides the `WORK` top-level dirname. This sits alongside every command
+above -- nothing here changes, `run_sim` just orchestrates it without
+touching the source tree.
+
+Example:
+```
+source env.sh
+./run_sim -test dma_random_test -seed 12345 -coverage
+./run_sim -suite smoke -jobs 8 -coverage -annotate
+./run_sim -clean -suite smoke
+```
+
 ## Register map
 
 ```
