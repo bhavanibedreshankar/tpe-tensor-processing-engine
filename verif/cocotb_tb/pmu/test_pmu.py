@@ -7,6 +7,7 @@ doesn't need a real Scheduler behind it to verify its own counter/register
 logic, only believable event pulses on those six wires.
 """
 import cocotb
+import pyuvm
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, Timer
 
@@ -113,10 +114,11 @@ class LatencyTest(TpeBaseTest):
         await RisingEdge(dut.clk)
 
         latency = await axi.read(PMU_CMD_LATENCY_LAST_ADDR)
-        assert latency == n_cycles, (
-            f"CMD_LATENCY_LAST={latency}, want {n_cycles} "
-            f"(see docs/verification/bug_list.md bug #7)"
-        )
+        if latency != n_cycles:
+            pyuvm.uvm_error(
+                "PMU_LATENCY: ",
+                f"CMD_LATENCY_LAST={latency}, want {n_cycles} (see docs/verification/bug_list.md bug #7)",
+            )
 
 
 async def _start_clock(dut):

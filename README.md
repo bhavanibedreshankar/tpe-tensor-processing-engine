@@ -140,7 +140,7 @@ make random     # 100 tests, ~2 min       -- pure seeded-random sweep
 All four run through `tools/regression.py` (the local parallel job-
 scheduler / farm replacement -- jobs run across block directories, JUnit
 XML + JSON results written to `sim/logs/<suite>/`). **Some `FAIL`s are
-expected** on `smoke`/`daily`/`random`: this repo ships 7 intentionally
+expected** on `smoke`/`daily`/`random`: this repo ships 10 intentionally
 injected bugs (see [Bug catalog](#bug-catalog-intentional-bugs) below) and
 the tests are supposed to catch them -- the run's exit code only goes
 nonzero on an actual infrastructure error (`ERROR`/`TIMEOUT`), never on a
@@ -169,8 +169,13 @@ python3 tools/waves.py dma     # opens that block's last sim's dump.vcd in GTKWa
 ### Bug catalog (intentional bugs)
 The RTL contains 7 deliberately injected bugs (starting at the Matrix
 Compute Engine) so the verification environment has something real to
-catch -- each documented with file:line, root cause, symptom, and exactly
-which test catches it in
+catch, plus 3 golden-model/testbench integration bugs added specifically so
+a test's failure *type* -- not just its message -- tells you which category
+caught it: a scoreboard data-compare mismatch raises `MismatchError`, a
+status/register check uses `pyuvm.uvm_error()`/`uvm_fatal()`
+(`UVMError`/`UVMFatalError`), and the C++ golden model itself failing
+outright raises `CModelError`. Each is documented with file:line, root
+cause, symptom, and exactly which test catches it in
 [`docs/verification/bug_list.md`](docs/verification/bug_list.md). The
 build/regression *infrastructure* is expected to run cleanly end-to-end at
 all times; a test **failing** because of a catalogued bug is the intended

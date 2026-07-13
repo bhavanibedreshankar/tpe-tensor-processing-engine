@@ -12,6 +12,8 @@ into the SRAM scratchpad (dp_ram convention, matching tpe_sram.sv
 directly); desc_len is in bytes and must be a whole number of 16-byte rows.
 """
 import random
+import struct
+from pathlib import Path
 
 import cocotb
 from cocotb.clock import Clock
@@ -20,6 +22,7 @@ from pyuvm import ConfigDB
 
 from verif.cocotb_tb.dma.env import DmaEnv
 from verif.cocotb_tb.dma.sequences import read_rows, write_rows
+from verif.cocotb_tb.env.golden_model import run_tpe_model
 from verif.cocotb_tb.env.tpe_base_test import TpeBaseTest
 
 ROW_BYTES = 16
@@ -188,3 +191,30 @@ async def dma_multiburst_write_test(dut):
 @cocotb.test()
 async def dma_error_test(dut):
     await _run("DmaErrorTest", dut)
+
+
+@cocotb.test()
+async def dma_cmodel_integration_test(dut):
+    """Deliberately malformed dma-apply invocation (bug #9, see
+    docs/verification/bug_list.md): a testbench/golden-model config-drift
+    bug, not an RTL defect -- claims one SRAM row more than the DDR/SRAM
+    image bytes actually supplied, so tpe_model's own stimulus-file size
+    check (main.cpp's cmd_dma_apply) legitimately rejects it, raising
+    CModelError. Doesn't drive the DUT at all -- purely about the
+    model/testbench call contract, not RTL behavior."""
+    await _start_clock(dut)
+
+    work_dir = Path("dma_scoreboard_work")
+    work_dir.mkdir(exist_ok=True)
+    stim_path = work_dir / "stim_cmodel_integration.bin"
+    out_path = work_dir / "out_cmodel_integration.bin"
+
+    ddr_depth, sram_depth, row_bytes = 8, 8, ROW_BYTES
+    with open(stim_path, "wb") as f:
+        f.write(struct.pack("<IIII", 0, 0, 1, 0))
+        f.write(bytes(ddr_depth * row_bytes))
+        f.write(bytes(sram_depth * row_bytes))
+
+    # Wrong on purpose: claims one row more of SRAM than actually supplied.
+    run_tpe_model("dma-apply", str(stim_path), str(out_path),
+                  str(ddr_depth), str(sram_depth + 1), str(row_bytes))

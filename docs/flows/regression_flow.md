@@ -140,10 +140,20 @@ catalogued bugs each tier's tests can reach:
 - `matmul_full_width_test` -- bug #5 (always, directed)
 - `irq_independent_clear_test` -- bug #6 (always, directed)
 - `latency_test` -- bug #7 (always, directed)
+- `sram_cmodel_integration_test` -- bug #8 (always; a golden-model config-
+  drift bug, not RTL -- see `bug_list.md`)
+- `dma_cmodel_integration_test` -- bug #9 (always, same category as #8)
+- `matmul_cmodel_integration_test` -- bug #10 (always, same category as #8)
 
 A run with *fewer* `FAIL`s than this on a tier that includes these tests is
 the actual red flag (it means a bug was accidentally fixed, or a test
 stopped exercising it) -- see `test_plan.md` section 5.
+
+`run_sim`'s `FAILURE SIGNATURE` column (`docs/flows/run_sim_flow.md`
+section 10) shows *which category* caught each: `MismatchError` for #1-#4,
+`UVMError`/`UVMFatalError` for #5-#7, `CModelError` for #8-#10 -- see
+`bug_list.md`'s header for why these are distinct exception types, not
+just distinct message text.
 
 ## Why this instead of a real job scheduler
 

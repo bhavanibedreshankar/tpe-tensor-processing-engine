@@ -34,6 +34,27 @@ class SramSanityTest(SramTestBase):
         await seq.start(self.env.agent_a.sequencer)
 
 
+class SramCModelIntegrationTest(SramTestBase):
+    """Deliberately misconfigured golden-model depth (bug #8, see
+    docs/verification/bug_list.md): a testbench/golden-model config-drift
+    bug, not an RTL defect -- the scoreboard is built believing the SRAM is
+    one row shallower than the DUT actually is. SramDirectedSeq's write to
+    the real last row (SRAM_DEPTH-1) is perfectly legal on real hardware,
+    but the golden model -- built with depth=SRAM_DEPTH-1 -- rejects that
+    same address as out-of-range for *its* belief of depth
+    (model/include/Scratchpad.hpp's check_addr), raising CModelError.
+    Demonstrates the flow catches model/DUT configuration drift, not just
+    RTL bugs."""
+
+    def build_phase(self):
+        ConfigDB().set(None, "*", "DUT", cocotb.top)
+        self.env = SramEnv("env", self, depth=SRAM_DEPTH - 1, row_bytes=ROW_BYTES)
+
+    async def run_test_body(self):
+        seq = SramDirectedSeq()
+        await seq.start(self.env.agent_a.sequencer)
+
+
 class SramRandomTest(SramTestBase):
     # Stays within [0, 4090) -- see SramDirectedSeq's reservation note.
     async def run_test_body(self):
@@ -76,6 +97,12 @@ async def sram_sanity_test(dut):
 async def sram_random_test(dut):
     await _start_clock(dut)
     await pyuvm_run_test("SramRandomTest")
+
+
+@cocotb.test()
+async def sram_cmodel_integration_test(dut):
+    await _start_clock(dut)
+    await pyuvm_run_test("SramCModelIntegrationTest")
 
 
 async def pyuvm_run_test(test_name):

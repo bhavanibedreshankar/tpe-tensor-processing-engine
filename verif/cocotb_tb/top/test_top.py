@@ -16,6 +16,7 @@ comment.
 import random
 
 import cocotb
+import pyuvm
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, Timer
 from pyuvm import ConfigDB
@@ -187,9 +188,11 @@ class MatmulFullWidthTest(TpeBaseTest):
         assert status_last_status(status) == STAT_OK
 
         status = await run_command(dut, axi, dut.clk, CMD_MATMUL, tag=22, dim_m=dim_m, dim_k=dim_k, dim_n=dim_n)
-        assert status_last_status(status) == STAT_OK, (
-            f"MATMUL with dim_n==COLS({COLS}) status={status_last_status(status)}, want STAT_OK"
-        )
+        if status_last_status(status) != STAT_OK:
+            pyuvm.uvm_error(
+                "MATMUL_FULL_WIDTH: ",
+                f"MATMUL with dim_n==COLS({COLS}) status={status_last_status(status)}, want STAT_OK",
+            )
 
 
 class IrqIndependentClearTest(TpeBaseTest):
@@ -216,9 +219,15 @@ class IrqIndependentClearTest(TpeBaseTest):
 
         await axi.write(CP_IRQ_STATUS_ADDR, 0b10)  # clear CMD_ERROR only
         irq_status = await axi.read(CP_IRQ_STATUS_ADDR)
-        assert irq_status & 0x3 == 0b01, (
-            f"clearing CMD_ERROR alone should leave CMD_DONE set: got {irq_status:#x}, want 0b01"
-        )
+        if irq_status & 0x3 != 0b01:
+            # uvm_fatal, not uvm_error: independent W1C is core IRQ-status
+            # plumbing every completion path depends on, not a single
+            # scenario-specific check -- see docs/verification/bug_list.md
+            # bug #6.
+            pyuvm.uvm_fatal(
+                "IRQ_INDEPENDENT_CLEAR: ",
+                f"clearing CMD_ERROR alone should leave CMD_DONE set: got {irq_status:#x}, want 0b01",
+            )
 
 
 class PmuDebugIntegrationTest(TpeBaseTest):

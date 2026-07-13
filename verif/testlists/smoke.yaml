@@ -7,13 +7,16 @@ tests:
   - {dir: smoke, test: smoke_toolchain_test}
 
   - {dir: sram, test: sram_sanity_test}
+  - {dir: sram, test: sram_cmodel_integration_test}
 
   - {dir: matrix_engine, test: matmul_sanity_test}
   - {dir: matrix_engine, test: matmul_overflow_test}
+  - {dir: matrix_engine, test: matmul_cmodel_integration_test}
 
   - {dir: dma, test: dma_sanity_test}
   - {dir: dma, test: dma_multiburst_write_test}
   - {dir: dma, test: dma_error_test}
+  - {dir: dma, test: dma_cmodel_integration_test}
 
   - {dir: top, test: matmul_flow_test}
   - {dir: top, test: irq_test}

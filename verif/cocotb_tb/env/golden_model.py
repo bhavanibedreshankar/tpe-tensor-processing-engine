@@ -10,12 +10,20 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 TPE_MODEL_BIN = REPO_ROOT / "model" / "build" / "tpe_model"
 
 
+class CModelError(RuntimeError):
+    """tpe_model itself failed (nonzero exit) -- a stimulus/config-framing
+    bug in the call site (e.g. a depth/size argument that doesn't match the
+    data actually supplied), as opposed to its output mismatching RTL (see
+    errors.MismatchError for that case). See docs/verification/bug_list.md
+    bugs #8/#9/#10 for the catalogued examples of this category."""
+
+
 def run_tpe_model(*args: str) -> None:
     if not TPE_MODEL_BIN.exists():
         raise FileNotFoundError(f"{TPE_MODEL_BIN} not found -- run `make -C model` first")
     result = subprocess.run([str(TPE_MODEL_BIN), *args], capture_output=True, text=True)
     if result.returncode != 0:
-        raise RuntimeError(f"tpe_model {' '.join(args)} failed (rc={result.returncode}): {result.stderr}")
+        raise CModelError(f"tpe_model {' '.join(args)} failed (rc={result.returncode}): {result.stderr}")
     # Only tpe_model's own TPE_LOG(...) output (model/include/Verbosity.hpp)
     # lands on stderr when TPE_VERBOSITY is set (see run_sim -verbosity) --
     # print it through so it interleaves with the RTL's own `TPE_LOG_*

@@ -451,6 +451,13 @@ def _failure_signature(log_text: str, max_len: int = 80) -> str:
     if not matches:
         return ""
     exc_type, message = matches[-1]
+    # Custom exception classes (MismatchError/CModelError/UVMError/...,
+    # see verif/cocotb_tb/env/errors.py, golden_model.py, pyuvm's own
+    # uvm_error()/uvm_fatal()) render as their fully-qualified
+    # "package.module.ClassName" in a traceback -- keep just the bare
+    # class name so the category reads clearly within max_len instead of
+    # being crowded out by its import path.
+    exc_type = exc_type.rsplit(".", 1)[-1]
     sig = f"{exc_type}: {message}"
     return sig if len(sig) <= max_len else sig[: max_len - 1] + "…"
 

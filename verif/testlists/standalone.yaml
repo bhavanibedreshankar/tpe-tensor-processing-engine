@@ -13,15 +13,18 @@ suite: standalone
 tests:
   - {dir: sram, test: sram_sanity_test, kind: sanity}
   - {dir: sram, test: sram_random_test, kind: random, default_seed: 1}
+  - {dir: sram, test: sram_cmodel_integration_test, kind: integration, expect_fail: bug8}
 
   - {dir: matrix_engine, test: matmul_sanity_test, kind: sanity}
   - {dir: matrix_engine, test: matmul_random_test, kind: random, default_seed: 7, expect_fail: "bug1,bug2"}
   - {dir: matrix_engine, test: matmul_overflow_test, kind: directed, expect_fail: bug3}
+  - {dir: matrix_engine, test: matmul_cmodel_integration_test, kind: integration, expect_fail: bug10}
 
   - {dir: dma, test: dma_sanity_test, kind: sanity}
   - {dir: dma, test: dma_random_test, kind: random, default_seed: 11}
   - {dir: dma, test: dma_multiburst_write_test, kind: directed, expect_fail: bug4}
   - {dir: dma, test: dma_error_test, kind: error}
+  - {dir: dma, test: dma_cmodel_integration_test, kind: integration, expect_fail: bug9}
 
   - {dir: top, test: matmul_flow_test, kind: sanity}
   - {dir: top, test: irq_test, kind: directed}

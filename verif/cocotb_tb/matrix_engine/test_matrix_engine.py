@@ -13,12 +13,15 @@ to 16x16/32x32/64x64, so testing the systolic timing logic at 4x4 exercises
 the same paths correctly while keeping debug tractable.
 """
 import random
+import struct
+from pathlib import Path
 
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, Timer
 from pyuvm import ConfigDB
 
+from verif.cocotb_tb.env.golden_model import run_tpe_model
 from verif.cocotb_tb.env.tpe_base_test import TpeBaseTest
 from verif.cocotb_tb.matrix_engine.env import MatrixEngineEnv
 from verif.cocotb_tb.matrix_engine.sequences import (
@@ -162,3 +165,29 @@ async def matmul_random_test(dut):
 @cocotb.test()
 async def matmul_overflow_test(dut):
     await _run("MatmulOverflowTest", dut)
+
+
+@cocotb.test()
+async def matmul_cmodel_integration_test(dut):
+    """Deliberately malformed matmul invocation (bug #10, see
+    docs/verification/bug_list.md): a testbench/golden-model config-drift
+    bug, not an RTL defect -- the stimulus header claims N=3 but only 2
+    columns of B/C_in data are actually supplied, so tpe_model's own
+    stimulus-file size check (main.cpp's cmd_matmul) legitimately rejects
+    it, raising CModelError. Doesn't drive the DUT at all -- purely about
+    the model/testbench call contract, not RTL behavior."""
+    await _start_clock(dut)
+
+    work_dir = Path("matmul_scoreboard_work")
+    work_dir.mkdir(exist_ok=True)
+    stim_path = work_dir / "stim_cmodel_integration.bin"
+    out_path = work_dir / "out_cmodel_integration.bin"
+
+    m, k, n_claimed, n_actual = 1, 1, 3, 2
+    with open(stim_path, "wb") as f:
+        f.write(struct.pack("<III", m, k, n_claimed))  # header claims N=3
+        f.write(bytes([1] * (m * k)))                   # A: m*k
+        f.write(bytes([1] * (k * n_actual)))             # B: only k*n_actual (2, not 3!)
+        f.write(struct.pack(f"<{m * n_actual}i", *([0] * (m * n_actual))))  # C_in: m*n_actual
+
+    run_tpe_model("matmul", str(stim_path), str(out_path))

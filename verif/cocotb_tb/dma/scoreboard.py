@@ -15,6 +15,7 @@ from pathlib import Path
 
 from pyuvm import uvm_scoreboard
 
+from verif.cocotb_tb.env.errors import MismatchError
 from verif.cocotb_tb.env.golden_model import run_tpe_model
 
 
@@ -82,4 +83,5 @@ class DmaScoreboard(uvm_scoreboard):
 
     def report_phase(self):
         self.logger.info(f"dma scoreboard: {self.checked} rows checked, {self.mismatches} mismatches")
-        assert self.mismatches == 0, f"{self.mismatches} row mismatches"
+        if self.mismatches:
+            raise MismatchError(f"{self.mismatches} row mismatches")

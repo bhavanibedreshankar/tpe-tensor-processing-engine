@@ -12,6 +12,7 @@ from pathlib import Path
 
 from pyuvm import uvm_scoreboard
 
+from verif.cocotb_tb.env.errors import MismatchError
 from verif.cocotb_tb.env.golden_model import run_tpe_model
 
 
@@ -71,9 +72,11 @@ class MatmulScoreboard(uvm_scoreboard):
             f"[{label}] {m}x{k}x{n}: {m * n - mismatches_here}/{m * n} values matched, "
             f"golden_overflow={bool(golden_overflow)}"
         )
-        assert mismatches_here == 0, f"[{label}] {mismatches_here} value mismatches"
+        if mismatches_here:
+            raise MismatchError(f"[{label}] {mismatches_here} value mismatches")
         return bool(golden_overflow)
 
     def report_phase(self):
         self.logger.info(f"matmul scoreboard: {self.checked} checks run, {self.mismatches} had mismatches")
-        assert self.mismatches == 0, f"{self.mismatches} check(s) had mismatches"
+        if self.mismatches:
+            raise MismatchError(f"{self.mismatches} check(s) had mismatches")
