@@ -271,17 +271,19 @@ module tpe_cmd_proc
     end else begin
       if (do_write && (s_awaddr == CP_CMD_PUSH_ADDR) && s_wdata[CP_CMD_PUSH_PUSH_MSB]) begin
         if (fifo_wr_en) begin
-          `TPE_LOG_CMD_MEDIUM("cmd_proc", stg_tag_q, push_cmd.opcode, $sformatf(
-              "cmd pushed sram_addr=%0h mem_addr=%0h dims=%0dx%0dx%0d",
-              stg_sram_addr_q, stg_mem_addr_q, stg_dim_m_q, stg_dim_k_q, stg_dim_n_q));
+          `TPE_LOG_MEDIUM("cmd_proc", $sformatf(
+              "cmd pushed opcode=%0s tag=%0d sram_addr=%0h mem_addr=%0h dims=%0dx%0dx%0d",
+              push_cmd.opcode.name(), stg_tag_q, stg_sram_addr_q, stg_mem_addr_q,
+              stg_dim_m_q, stg_dim_k_q, stg_dim_n_q));
         end else begin
           `TPE_LOG_LOW("cmd_proc", $sformatf("cmd push rejected: enable=%0b fifo_full=%0b",
                                               ctrl_enable_q, fifo_full));
         end
       end
       if (sched_done_valid) begin
-        `TPE_LOG_CMD_MEDIUM("cmd_proc", sched_done_tag, sched_done_opcode,
-                             $sformatf("scheduler done: status=%0s", sched_done_status.name()));
+        `TPE_LOG_MEDIUM("cmd_proc", $sformatf("scheduler done: tag=%0d opcode=%0s status=%0s",
+                                               sched_done_tag, sched_done_opcode.name(),
+                                               sched_done_status.name()));
       end
       if (do_write) begin
         `TPE_LOG_HIGH("cmd_proc", $sformatf("reg write addr=%0h data=%0h", s_awaddr, s_wdata));
