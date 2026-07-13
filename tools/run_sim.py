@@ -139,6 +139,28 @@ def load_testlist(suite: str) -> list:
         return yaml.safe_load(f)["tests"]
 
 
+_SEED_SUFFIX = re.compile(r"\.seed\d+$")
+
+
+def resolve_test_name(raw: str, catalog: dict) -> str:
+    """-test/-clean -test accept either a bare test name or the
+    "<dir>.<test>[.seed<N>]" tag format run_sim's own tables show
+    (tag_for(), e.g. the TAG/SCOPE columns in -suite's summary and
+    -monitor) -- copying one of those values straight into -test is a
+    natural thing to try and should just work. Returns `raw` unresolved
+    (unchanged) if neither form matches anything, so callers' existing
+    "unknown test" error still reports what the user actually typed."""
+    if raw in catalog:
+        return raw
+    stripped = _SEED_SUFFIX.sub("", raw)
+    if "." in stripped:
+        dir_part, _, test_part = stripped.partition(".")
+        entry = catalog.get(test_part)
+        if entry and entry["dir"] == dir_part:
+            return test_part
+    return raw
+
+
 def venv_env(extra: dict) -> dict:
     if not (VENV / "bin" / "activate").exists():
         log.error(f"run_sim: {VENV} not found -- run `make venv` first")
@@ -745,20 +767,23 @@ def print_final_summary(coverage_result: dict = None, waves_opened: Path = None)
 
 def run_single_test(args) -> int:
     catalog = load_catalog()
-    entry = catalog.get(args.test)
+    test_name = resolve_test_name(args.test, catalog)
+    entry = catalog.get(test_name)
     if entry is None:
         log.error(f"run_sim: unknown test {args.test!r} -- not in "
                   f"verif/testlists/standalone.yaml, try --list")
         return 2
+    if test_name != args.test:
+        log.info(f"run_sim: resolved {args.test!r} -> test={test_name!r}")
 
-    result_dir = work_root(args) / tag_for(entry["dir"], args.test, args.seed)
+    result_dir = work_root(args) / tag_for(entry["dir"], test_name, args.seed)
     console_log_path = result_dir / "console.log"
     with console_log(console_log_path):
-        log.info(f"run_sim: test={args.test} dir={entry['dir']} kind={entry.get('kind')}"
+        log.info(f"run_sim: test={test_name} dir={entry['dir']} kind={entry.get('kind')}"
                  + (f" seed={args.seed}" if args.seed is not None else "")
                  + f" -> {result_dir}")
 
-        r = run_test(entry["dir"], args.test, args.seed, result_dir, args.timeout, cache_root(args),
+        r = run_test(entry["dir"], test_name, args.seed, result_dir, args.timeout, cache_root(args),
                      keep_coverage=args.coverage, keep_waves=args.waves, verbosity=args.verbosity)
         print(f"\n{r['tag']:<50} {r['status']:<8} {r['wall_s']:>8.2f}s")
         if r.get("signature"):
@@ -857,8 +882,9 @@ def do_clean(args) -> int:
         return 0
     if args.test:
         catalog = load_catalog()
-        entry = catalog.get(args.test)
-        prefix = f"{entry['dir']}.{args.test}" if entry else args.test
+        test_name = resolve_test_name(args.test, catalog)
+        entry = catalog.get(test_name)
+        prefix = f"{entry['dir']}.{test_name}" if entry else args.test
         matches = sorted(p for p in root.glob(f"{prefix}*")) if root.exists() else []
         if not matches:
             log.warning(f"run_sim: nothing under {root} matches {args.test!r}")

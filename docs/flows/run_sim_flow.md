@@ -145,7 +145,7 @@ Every option accepts both a single- and double-dash spelling
 
 | Flag | Meaning |
 |---|---|
-| `-test NAME` | Run one test. Its block dir is looked up in `verif/testlists/standalone.yaml` (the master catalog) automatically. |
+| `-test NAME` | Run one test. Its block dir is looked up in `verif/testlists/standalone.yaml` (the master catalog) automatically. Also accepts the `<dir>.<test>[.seed<N>]` tag format `run_sim`'s own tables show (e.g. `-test top.matmul_full_width_test`, copy-pasted straight from a `-suite` summary or `-monitor` row) -- the `<dir>.`/`.seed<N>` parts are stripped automatically. `-clean -test` accepts the same two forms. |
 | `-suite {sanity,smoke,daily,random,standalone}` | Run every entry in `verif/testlists/<suite>.yaml`. Mutually exclusive with `-test`. |
 | `-seed N` | `TPE_SEED` override, only meaningful with `-test` on a `kind: random` entry. Suite entries carry their own per-test seed from the testlist YAML -- `-seed` doesn't apply there. |
 | `-jobs N` | Max concurrent block directories for `-suite` (default: `nproc`). Tests within the same block directory always run sequentially -- see [`regression_flow.md`](regression_flow.md) section 2 for why. |
@@ -170,6 +170,7 @@ Every option accepts both a single- and double-dash spelling
 ./run_sim -test dma_random_test -seed 12345 -coverage
 ./run_sim -test matmul_overflow_test -waves            # opens GTKWave once done
 ./run_sim -test matmul_overflow_test -verbosity DEBUG   # design + golden model debug prints
+./run_sim -test top.matmul_full_width_test              # tag form (as shown in -suite/-monitor) also works
 ./run_sim -suite smoke -jobs 8 -coverage -annotate
 ./run_sim -suite daily -farm
 ./run_sim -lint -block tpe_dma
