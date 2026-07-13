@@ -30,6 +30,40 @@ reading as a generic `AssertionError`:
   itself failing outright (nonzero exit), as opposed to its output
   mismatching RTL (bugs #8-#10).
 
+**Which of these are actually an RTL-vs-golden-model comparison, and which
+aren't** (five category *names* don't all mean the same kind of check):
+
+- `AssertionError` (#1-#3) and `MismatchError` (#4) *are* genuine
+  RTL-vs-cmodel diffs: `MatmulScoreboard.check()` compares the RTL's
+  observed output tile against `run_tpe_model("matmul", ...)`'s computed
+  result; `DmaScoreboard.check_row()` compares an RTL-observed row
+  (backdoor-read from the DUT) against `expected_row()`, which is
+  populated by `run_tpe_model("dma-apply", ...)`'s output. Both raise only
+  when the RTL and the C++ model actually disagree.
+- `UVMError`/`UVMFatalError` (#5-#7) are **not** a data comparison at all
+  -- each checks one RTL register/status value against a constant known
+  correct from the test's own setup (e.g. `status_last_status(status) ==
+  STAT_OK`, `latency == n_cycles`). No golden model or shadow model is
+  involved; it's "does this register read what the architecture spec says
+  it should."
+- `CModelError` (#8-#10) is **not** a comparison against RTL at all --
+  these don't even drive the DUT (see each test's docstring). They check
+  that `tpe_model`'s own CLI rejects a malformed/misconfigured invocation
+  (wrong depth, mismatched stimulus size); it's a model/testbench
+  call-contract check, independent of DUT behavior.
+- Worth knowing if auditing further: SRAM's scoreboard
+  (`verif/cocotb_tb/sram/scoreboard.py`) actually has *two* separate check
+  mechanisms -- a live per-cycle check against a lightweight Python shadow
+  dict (`self.shadow`, not the C++ model, see that file's own docstring
+  for why), and a separate whole-image cross-check against the real
+  `tpe_model sram-apply` golden model. None of the 10 catalogued bugs
+  above currently exercise the Python-shadow path (`sram_sanity_test`/
+  `sram_random_test` both stay green -- no injected bug targets
+  `rtl/sram/tpe_sram.sv` itself), so every failure in the table below that
+  looks like a "mismatch" is specifically an RTL-vs-cmodel diff, not a
+  shadow-model diff, even though the RTL-vs-shadow mechanism exists
+  elsewhere in the codebase.
+
 Columns: which test(s) are expected to fail, what the observable symptom is
 (assertion fire / scoreboard mismatch / coverage gap / cmodel rejection),
 root cause, and which exception category it's caught as.
