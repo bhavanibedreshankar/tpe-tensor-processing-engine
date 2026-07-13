@@ -26,7 +26,7 @@ export PYTHONPATH := $(REPO_ROOT):$(PYTHONPATH)
 EXTRA_ARGS += -GDDR_DEPTH=256
 EXTRA_ARGS += --assert --coverage-line --coverage-toggle --coverage-user
 EXTRA_ARGS += -Wall -Wno-fatal -Wno-DECLFILENAME -Wno-UNUSEDPARAM -Wno-UNUSEDSIGNAL -Wno-PINCONNECTEMPTY
-EXTRA_ARGS += --trace --trace-structs
+EXTRA_ARGS += --trace --trace-structs --autoflush
 
 include $(shell cocotb-config --makefiles)/Makefile.sim
 

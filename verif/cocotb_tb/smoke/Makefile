@@ -16,7 +16,7 @@ SIM_BUILD := sim_build
 # assertion using |=> / disable-iff. The three explicit flags below produce
 # the same line+toggle+functional coverage without hitting that bug.
 EXTRA_ARGS += --assert --coverage-line --coverage-toggle --coverage-user -Wall -Wno-fatal -Wno-DECLFILENAME
-EXTRA_ARGS += --trace --trace-structs
+EXTRA_ARGS += --trace --trace-structs --autoflush
 
 export VERILATOR_TRACE := 1
 

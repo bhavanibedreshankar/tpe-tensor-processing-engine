@@ -213,32 +213,44 @@ module tpe_scheduler
   assign sched_dma_wait       = (state_q == ST_WAIT_DMA);
 
   // ---- Debug logging (see rtl/include/tpe_verbosity.svh) -----------------
+  // cmd_q only latches the popped command on the ST_POP->ST_DECODE edge (see
+  // the always_ff above), so during ST_IDLE/ST_POP it still holds whatever
+  // the *previous* command was -- the plain (untagged) macros are used for
+  // those two states' own transition on purpose, not an oversight.
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       // no state to reset -- debug prints only
     end else begin
       if (state_d != state_q) begin
-        `TPE_LOG_HIGH("scheduler", $sformatf("state %0s -> %0s", state_q.name(), state_d.name()));
+        if (state_q == ST_IDLE || state_q == ST_POP) begin
+          `TPE_LOG_HIGH("scheduler", $sformatf("state %0s -> %0s", state_q.name(), state_d.name()));
+        end else begin
+          `TPE_LOG_CMD_HIGH("scheduler", cmd_q.tag, cmd_q.opcode,
+                             $sformatf("state %0s -> %0s", state_q.name(), state_d.name()));
+        end
       end
       if (state_q == ST_DECODE) begin
-        `TPE_LOG_MEDIUM("scheduler", $sformatf("decode tag=%0d opcode=%0s -> status=%0s",
-                                                cmd_q.tag, cmd_q.opcode.name(), status_q.name()));
+        `TPE_LOG_CMD_MEDIUM("scheduler", cmd_q.tag, cmd_q.opcode,
+                             $sformatf("decode -> status=%0s", status_q.name()));
         if (status_q != STAT_OK) begin
-          `TPE_LOG_LOW("scheduler", $sformatf("tag=%0d rejected: %0s", cmd_q.tag, status_q.name()));
+          `TPE_LOG_CMD_LOW("scheduler", cmd_q.tag, cmd_q.opcode,
+                            $sformatf("rejected: %0s", status_q.name()));
         end
       end
       if (sched_done_valid) begin
-        `TPE_LOG_MEDIUM("scheduler", $sformatf("complete tag=%0d status=%0s",
-                                                sched_done_tag, sched_done_status.name()));
+        `TPE_LOG_CMD_MEDIUM("scheduler", sched_done_tag, cmd_q.opcode,
+                             $sformatf("complete status=%0s", sched_done_status.name()));
       end
       if (dma_start) begin
-        `TPE_LOG_DEBUG("scheduler", $sformatf("dma dispatch mem_addr=%0h sram_addr=%0h len=%0d dir=%0b",
-                                               dma_desc_mem_addr, dma_desc_sram_addr, dma_desc_len,
-                                               dma_desc_dir));
+        `TPE_LOG_CMD_DEBUG("scheduler", cmd_q.tag, cmd_q.opcode,
+                            $sformatf("dma dispatch mem_addr=%0h sram_addr=%0h len=%0d dir=%0b",
+                                      dma_desc_mem_addr, dma_desc_sram_addr, dma_desc_len,
+                                      dma_desc_dir));
       end
       if (me_start) begin
-        `TPE_LOG_DEBUG("scheduler", $sformatf("matmul dispatch m=%0d k=%0d n=%0d",
-                                               me_dim_m, me_dim_k, me_dim_n));
+        `TPE_LOG_CMD_DEBUG("scheduler", cmd_q.tag, cmd_q.opcode,
+                            $sformatf("matmul dispatch m=%0d k=%0d n=%0d",
+                                      me_dim_m, me_dim_k, me_dim_n));
       end
     end
   end

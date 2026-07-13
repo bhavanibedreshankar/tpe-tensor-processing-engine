@@ -48,7 +48,31 @@ CMD_STORE = 0x4
 CMD_BARRIER = 0x5
 CMD_IRQ_TEST = 0xE
 
+# tpe_pkg::cmd_status_e
 STAT_OK = 0
+STAT_BAD_OPCODE = 1
+STAT_BAD_DIM = 2
+STAT_SRAM_OOB = 3
+STAT_MEM_ERROR = 4
+STAT_ACCUM_OVERFLOW = 5
+
+STATUS_NAMES = {
+    STAT_OK: "STAT_OK",
+    STAT_BAD_OPCODE: "STAT_BAD_OPCODE",
+    STAT_BAD_DIM: "STAT_BAD_DIM",
+    STAT_SRAM_OOB: "STAT_SRAM_OOB",
+    STAT_MEM_ERROR: "STAT_MEM_ERROR",
+    STAT_ACCUM_OVERFLOW: "STAT_ACCUM_OVERFLOW",
+}
+
+
+def status_name(status_word) -> str:
+    """Symbolic name for a status code pulled from status_last_status(), so
+    failure messages read like the RTL side's own `.name()` debug prints
+    (e.g. STAT_BAD_DIM) instead of a bare int an engineer has to cross-
+    reference against tpe_pkg.sv's cmd_status_e by hand."""
+    return STATUS_NAMES.get(status_word, f"STAT_UNKNOWN({status_word})")
+
 
 ROWS = 16
 COLS = 16
@@ -148,10 +172,12 @@ class ErrorHandlingTest(TpeBaseTest):
 
         BAD_OPCODE = 0x6  # reserved/unused in tpe_pkg::cmd_opcode_e
         status = await run_command(dut, axi, dut.clk, BAD_OPCODE, tag=12)
-        assert status_last_status(status) == 1, f"bad opcode status={status_last_status(status)} (want STAT_BAD_OPCODE=1)"
+        assert status_last_status(status) == STAT_BAD_OPCODE, \
+            f"bad opcode status={status_name(status_last_status(status))}, want STAT_BAD_OPCODE"
 
         status = await run_command(dut, axi, dut.clk, CMD_MATMUL, tag=13, dim_m=1, dim_k=ROWS + 1, dim_n=1)
-        assert status_last_status(status) == 2, f"bad dim status={status_last_status(status)} (want STAT_BAD_DIM=2)"
+        assert status_last_status(status) == STAT_BAD_DIM, \
+            f"bad dim status={status_name(status_last_status(status))}, want STAT_BAD_DIM"
 
 
 class MatmulFullWidthTest(TpeBaseTest):
@@ -191,7 +217,8 @@ class MatmulFullWidthTest(TpeBaseTest):
         if status_last_status(status) != STAT_OK:
             pyuvm.uvm_error(
                 "MATMUL_FULL_WIDTH: ",
-                f"MATMUL with dim_n==COLS({COLS}) status={status_last_status(status)}, want STAT_OK",
+                f"MATMUL with dim_n==COLS({COLS}) status={status_name(status_last_status(status))}, "
+                f"want STAT_OK",
             )
 
 
@@ -212,7 +239,7 @@ class IrqIndependentClearTest(TpeBaseTest):
 
         BAD_OPCODE = 0x6
         status = await run_command(dut, axi, dut.clk, BAD_OPCODE, tag=30)
-        assert status_last_status(status) == 1  # STAT_BAD_OPCODE
+        assert status_last_status(status) == STAT_BAD_OPCODE
 
         irq_status = await axi.read(CP_IRQ_STATUS_ADDR)
         assert irq_status & 0x3 == 0x3, f"expected both CMD_DONE and CMD_ERROR set, got {irq_status:#x}"
@@ -257,7 +284,7 @@ class PmuDebugIntegrationTest(TpeBaseTest):
 
         BAD_OPCODE = 0x6
         status = await run_command(dut, axi, dut.clk, BAD_OPCODE, tag=0x51)
-        assert status_last_status(status) == 1  # STAT_BAD_OPCODE
+        assert status_last_status(status) == STAT_BAD_OPCODE
 
         cycles = await axi.read(PMU_CYCLE_COUNT_ADDR)
         assert cycles > 0, f"PMU_CYCLE_COUNT={cycles} after two commands, want >0 (router not reaching PMU?)"

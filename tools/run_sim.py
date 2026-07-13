@@ -491,11 +491,13 @@ def _failure_signature(log_text: str, max_len: int = 80) -> str:
     return sig if len(sig) <= max_len else sig[: max_len - 1] + "…"
 
 
-# Matches both the RTL side's `$display("%0t [%-6s] %-16s %s", ...)`
-# (rtl/include/tpe_verbosity.svh, e.g. "120000 [MEDIUM] dma    start ...")
+# Matches both the RTL side's `$display("%0tps [%-6s] %-16s %s", ...)`
+# (rtl/include/tpe_verbosity.svh, e.g. "120000ps [MEDIUM] dma    start ...")
 # and the C++ model's `[LEVEL] message` (model/include/Verbosity.hpp, no
-# timestamp prefix).
-_DEBUG_LINE = re.compile(r"^\s*(?:\d+\s+)?\[\s*(?:NONE|LOW|MEDIUM|HIGH|DEBUG)\s*\]")
+# timestamp prefix). The optional `ps`/`ns` suffix on the digits is the RTL
+# side's explicit time unit (see tpe_verbosity.svh -- $time alone is
+# unitless).
+_DEBUG_LINE = re.compile(r"^\s*(?:\d+(?:ps|ns)?\s+)?\[\s*(?:NONE|LOW|MEDIUM|HIGH|DEBUG)\s*\]")
 
 
 def _extract_debug_lines(text: str) -> list:

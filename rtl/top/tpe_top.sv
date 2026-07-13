@@ -174,6 +174,7 @@ module tpe_top
       .sched_done_valid(sched_done_valid),
       .sched_done_tag(sched_done_tag),
       .sched_done_status(sched_done_status),
+      .sched_done_opcode(sched_done_opcode),
       .sched_busy(sched_busy)
   );
 
