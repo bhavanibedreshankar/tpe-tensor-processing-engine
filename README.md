@@ -171,10 +171,11 @@ The RTL contains 7 deliberately injected bugs (starting at the Matrix
 Compute Engine) so the verification environment has something real to
 catch, plus 3 golden-model/testbench integration bugs added specifically so
 a test's failure *type* -- not just its message -- tells you which category
-caught it: a scoreboard data-compare mismatch raises `MismatchError`, a
-status/register check uses `pyuvm.uvm_error()`/`uvm_fatal()`
+caught it: a plain `assert` (`AssertionError`) for most scoreboard data
+compares, a distinct `MismatchError` for one that's deliberately kept
+separate, a status/register check using `pyuvm.uvm_error()`/`uvm_fatal()`
 (`UVMError`/`UVMFatalError`), and the C++ golden model itself failing
-outright raises `CModelError`. Each is documented with file:line, root
+outright raising `CModelError`. Each is documented with file:line, root
 cause, symptom, and exactly which test catches it in
 [`docs/verification/bug_list.md`](docs/verification/bug_list.md). The
 build/regression *infrastructure* is expected to run cleanly end-to-end at
