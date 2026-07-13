@@ -102,6 +102,13 @@ from tools.regression import _parse_results_xml as parse_results_xml  # noqa: E4
 
 log = get_logger("run_sim")
 
+# Captured at import time, before console_log() (see below) ever gets a
+# chance to re-point sys.stdout at a tee -- the real terminal stream,
+# used for output that should stay terminal-only and never land in
+# console.log (currently just -verbosity's debug-line dump; see
+# run_rtl_sim(), same rationale as _monitor_background()'s live page).
+_REAL_STDOUT = sys.stdout
+
 DEFAULT_TIMEOUT_S = 120
 TESTLIST_DIR = REPO_ROOT / "verif" / "testlists"
 VENV = REPO_ROOT / ".venv"
@@ -484,6 +491,17 @@ def _failure_signature(log_text: str, max_len: int = 80) -> str:
     return sig if len(sig) <= max_len else sig[: max_len - 1] + "…"
 
 
+# Matches both the RTL side's `$display("%0t [%-6s] %-16s %s", ...)`
+# (rtl/include/tpe_verbosity.svh, e.g. "120000 [MEDIUM] dma    start ...")
+# and the C++ model's `[LEVEL] message` (model/include/Verbosity.hpp, no
+# timestamp prefix).
+_DEBUG_LINE = re.compile(r"^\s*(?:\d+\s+)?\[\s*(?:NONE|LOW|MEDIUM|HIGH|DEBUG)\s*\]")
+
+
+def _extract_debug_lines(text: str) -> list:
+    return [line for line in text.splitlines() if _DEBUG_LINE.match(line)]
+
+
 def run_rtl_sim(dir_: str, test: str, seed, result_dir: Path, sim_build: Path, filelist: dict,
                  timeout_s: int, cov_root: Path = None, keep_coverage: bool = False,
                  keep_waves: bool = False, verbosity: str = None) -> dict:
@@ -569,6 +587,25 @@ def run_rtl_sim(dir_: str, test: str, seed, result_dir: Path, sim_build: Path, f
         status, cocotb_time_s = parse_results_xml(results_xml, test)
 
     signature = _failure_signature(stdout) if status in ("FAIL", "ERROR") else ""
+
+    # -verbosity's whole point is extra debug prints, from both the RTL
+    # (rtl/include/tpe_verbosity.svh) and the C++ golden model
+    # (model/include/Verbosity.hpp). They already land in this test's own
+    # rtl_sim/run.log in full (log_file.write_text(stdout) above) -- that's
+    # their durable home, so this dump writes straight to the real
+    # terminal via _REAL_STDOUT (never through print()/sys.stdout, which
+    # console_log() may have re-pointed at the console.log tee) rather
+    # than duplicating potentially thousands of lines into console.log
+    # too. Without this, -verbosity DEBUG produces no visible difference
+    # at all -- everything landed in a file the user has to know to open.
+    if verbosity:
+        debug_lines = _extract_debug_lines(stdout)
+        if debug_lines:
+            _REAL_STDOUT.write(f"\n--- {tag}: design/model debug output ({verbosity}) ---\n")
+            for line in debug_lines:
+                _REAL_STDOUT.write(line + "\n")
+            _REAL_STDOUT.write(f"--- {len(debug_lines)} line(s), full log: {log_file} ---\n")
+            _REAL_STDOUT.flush()
 
     write_status(task_dir, state=status, duration_s=wall_s, signature=signature, end=_now())
     record_task("rtl_sim", tag, status, wall_s, note=signature)

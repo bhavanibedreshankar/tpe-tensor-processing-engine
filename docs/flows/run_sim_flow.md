@@ -150,7 +150,7 @@ Every option accepts both a single- and double-dash spelling
 | `-seed N` | `TPE_SEED` override, only meaningful with `-test` on a `kind: random` entry. Suite entries carry their own per-test seed from the testlist YAML -- `-seed` doesn't apply there. |
 | `-jobs N` | Max concurrent block directories for `-suite` (default: `nproc`). Tests within the same block directory always run sequentially -- see [`regression_flow.md`](regression_flow.md) section 2 for why. |
 | `-timeout N` | Per-test timeout in seconds (default 120). |
-| `-verbosity {NONE,LOW,MEDIUM,HIGH,DEBUG}` | Debug print level for both the RTL design (`+VERBOSITY=` plusarg, `rtl/include/tpe_verbosity.svh`) and the C++ golden model (`TPE_VERBOSITY` env var, `model/include/Verbosity.hpp`, including when a scoreboard invokes it mid-test) -- see `docs/flows/build_flow.md` section 7. Default: unset, i.e. silent. |
+| `-verbosity {NONE,LOW,MEDIUM,HIGH,DEBUG}` | Debug print level for both the RTL design (`+VERBOSITY=` plusarg, `rtl/include/tpe_verbosity.svh`) and the C++ golden model (`TPE_VERBOSITY` env var, `model/include/Verbosity.hpp`, including when a scoreboard invokes it mid-test) -- see `docs/flows/build_flow.md` section 7. Default: unset, i.e. silent. The matching `[LEVEL]`-tagged lines print to the terminal after that test finishes (not into `console.log` -- they already live in full in that test's own `rtl_sim/run.log`, see section 12). |
 | `-farm` | Runs the same local parallel execution as a plain `-suite` run; today this is a naming placeholder only (no remote scheduler wired up), see section 9. |
 | `-coverage` | Keep this run's `coverage.dat`, merge/report it via `tools/cov_merge.py` (imported directly, its own verbose per-hierarchy dump swallowed -- see section 10) -- works with `-test` or `-suite`. |
 | `-annotate` | With `-coverage`, also write a per-source annotated report (`verilator_coverage --annotate`). |
@@ -274,6 +274,14 @@ suite's whole duration would otherwise balloon console.log with
 thousands of near-duplicate snapshots; the file is meant to hold the
 durable record (what ran, cache hits, pass/fail, the final coverage
 score), not a replay of the live view.
+
+Same reasoning for `-verbosity`'s `[LEVEL]`-tagged debug-line dump
+(section 6): `run_rtl_sim()` writes it straight to `_REAL_STDOUT`
+(captured at import time, same mechanism as `-monitor`'s), never through
+`print()`. Those lines are already captured in full in that test's own
+`rtl_sim/run.log` -- duplicating potentially thousands of them into
+`console.log` too would bloat the one file meant to stay a compact,
+durable summary.
 
 ## 13. A gotcha worth knowing if you extend this
 
