@@ -59,6 +59,14 @@ jobs:
       - name: run_sim -suite smoke
         run: ./run_sim -suite smoke
 
+      - name: DEBUG dump compile logs on failure
+        if: failure()
+        run: |
+          for f in "$WORK_DIR"/WORK/_cache/*/compile/build.log; do
+            echo "=== $f ==="
+            cat "$f"
+          done
+
       - name: Upload smoke regression results
         if: always()
         uses: actions/upload-artifact@v4
