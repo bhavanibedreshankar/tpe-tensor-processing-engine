@@ -13,6 +13,14 @@
 - **Lint + Smoke** runs on every push/PR (plus manual dispatch).
 - **Daily Regression** runs on the 06:00 UTC cron (plus manual dispatch).
 - **Random Regression** is manual-dispatch-only.
+- **A green badge means infrastructure health, not zero test failures.**
+  This repo's RTL has intentionally injected bugs
+  ([`docs/verification/bug_list.md`](docs/verification/bug_list.md)) that
+  are *expected* to FAIL every run -- `run_sim`'s exit code only goes
+  nonzero on an `ERROR`/`TIMEOUT` (the harness itself breaking), so a
+  catalogued-bug FAIL shows up in the run's JUnit artifact without
+  reddening the badge. Cross-check any FAIL against the bug list before
+  treating it as a regression.
 - See [`docs/flows/ci_flow.md`](docs/flows/ci_flow.md) for the full flow.
 
 **[→ Interactive project overview](https://bhavanibedreshankar.github.io/tpe-tensor-processing-engine/)**
