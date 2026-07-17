@@ -1,16 +1,19 @@
 # TPE -- Tensor Processing Engine
 
+## Continuous Integration
+
 [![Lint + Smoke](https://github.com/bhavanibedreshankar/tpe-tensor-processing-engine/actions/workflows/lint-smoke.yml/badge.svg)](https://github.com/bhavanibedreshankar/tpe-tensor-processing-engine/actions/workflows/lint-smoke.yml)
 [![Daily Regression](https://github.com/bhavanibedreshankar/tpe-tensor-processing-engine/actions/workflows/daily-regression.yml/badge.svg)](https://github.com/bhavanibedreshankar/tpe-tensor-processing-engine/actions/workflows/daily-regression.yml)
 [![Random Regression](https://github.com/bhavanibedreshankar/tpe-tensor-processing-engine/actions/workflows/random-regression.yml/badge.svg)](https://github.com/bhavanibedreshankar/tpe-tensor-processing-engine/actions/workflows/random-regression.yml)
 
-Three separate workflows (`.github/workflows/lint-smoke.yml`,
-`daily-regression.yml`, `random-regression.yml`), each named for what it
-runs, so each badge/link is unambiguous and its click-through is always
-that workflow's own run history -- no query filtering needed. Lint + Smoke
-runs on every push/PR (plus manual dispatch); Daily on the 06:00 UTC cron
-(plus manual dispatch); Random is manual-dispatch-only. See
-`docs/flows/ci_flow.md`.
+- Three separate workflows (`.github/workflows/lint-smoke.yml`,
+  `daily-regression.yml`, `random-regression.yml`), each named for what
+  it runs, so each badge/link is unambiguous and its click-through is
+  always that workflow's own run history -- no query filtering needed.
+- **Lint + Smoke** runs on every push/PR (plus manual dispatch).
+- **Daily Regression** runs on the 06:00 UTC cron (plus manual dispatch).
+- **Random Regression** is manual-dispatch-only.
+- See [`docs/flows/ci_flow.md`](docs/flows/ci_flow.md) for the full flow.
 
 **[→ Interactive project overview](https://bhavanibedreshankar.github.io/tpe-tensor-processing-engine/)**
 -- a visual, no-chip-background-required walkthrough of what this chip
