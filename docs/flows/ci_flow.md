@@ -2,27 +2,43 @@
 
 ## GitHub Actions (primary, free)
 
-`.github/workflows/regression.yml` (must live under `.github/workflows/`
-for GitHub Actions to discover it -- it previously sat under
-`ci/github/workflows/`, which is not a path Actions scans, so it never
-actually ran):
-- on every push/PR: `./run_sim -lint` + `./run_sim -suite smoke`,
+Three separate workflow files under `.github/workflows/` (must live there
+for GitHub Actions to discover them -- an earlier version of this sat
+under `ci/github/workflows/`, which is not a path Actions scans, so it
+never actually ran), one per regression tier, each with its own `name:`
+so its status badge/run-history page is unambiguous (a single combined
+workflow with a suite-picker `workflow_dispatch` input was tried first --
+GitHub's native badge only ever shows the *workflow's* name, not a
+per-job label, so every badge rendered identically regardless of the
+markdown alt text pointing at it; splitting into separate files was the
+actual fix, not a query-string workaround):
+
+- **`lint-smoke.yml`** ("Lint + Smoke"): on every push/PR, plus manual
+  `workflow_dispatch` -- `./run_sim -lint` + `./run_sim -suite smoke`,
   artifacts uploaded from `$WORK_DIR/WORK/smoke/`
-- on a nightly schedule (06:00 UTC): `./run_sim -suite daily -coverage
-  -annotate`, artifacts uploaded from `$WORK_DIR/WORK/daily/` (includes
-  the merged coverage report -- `-coverage` drives `tools/cov_merge.py`
-  the same way `make cov-merge` used to; there's no `run_sim` equivalent
-  of the old `make profile`/`tools/profiler.py` step yet, since that tool
-  reads `tools/regression.py`'s `results.json` output, which `run_sim`
-  doesn't produce, so it was dropped rather than left silently broken)
-- on manual `workflow_dispatch`: a required `suite` choice input
-  (`smoke`/`daily`/`random`, defaults to `random`) picks which single job
-  actually runs -- each job's `if` also matches
-  `workflow_dispatch` + its own suite name, alongside that job's normal
-  trigger (`push`/`pull_request` for smoke, `schedule` for daily), so the
-  Actions UI's "Run workflow" button (or `gh workflow run regression.yml
-  -f suite=smoke`) can trigger any tier on demand without waiting for a
-  push or the nightly cron
+- **`daily-regression.yml`** ("Daily Regression"): on a nightly schedule
+  (06:00 UTC), plus manual `workflow_dispatch` -- `./run_sim -suite daily
+  -coverage -annotate`, artifacts uploaded from `$WORK_DIR/WORK/daily/`
+  (includes the merged coverage report -- `-coverage` drives
+  `tools/cov_merge.py` the same way `make cov-merge` used to; there's no
+  `run_sim` equivalent of the old `make profile`/`tools/profiler.py` step
+  yet, since that tool reads `tools/regression.py`'s `results.json`
+  output, which `run_sim` doesn't produce, so it was dropped rather than
+  left silently broken)
+- **`random-regression.yml`** ("Random Regression"): manual
+  `workflow_dispatch` only -- `./run_sim -suite random`, artifacts
+  uploaded from `$WORK_DIR/WORK/random/`
+
+Each workflow's own Actions page (e.g.
+`github.com/<owner>/<repo>/actions/workflows/lint-smoke.yml`) is
+inherently that tier's run history, newest first -- no event-query
+filtering needed, unlike the single-workflow version. `gh workflow run
+lint-smoke.yml` (or `daily-regression.yml`/`random-regression.yml`)
+triggers one specifically from the terminal. All three still share the
+same `actions/cache` key for the Verilator 5.050 build
+(`verilator-5.050-${{ runner.os }}-v1`) -- cache scope is repo-wide, not
+per-workflow, so whichever workflow runs first after a cache eviction
+pays the ~10-minute build and the other two reuse it.
 
 Each job sets `WORK_DIR` to an **absolute** path
 (`${{ github.workspace }}/sim/logs/ci`) before calling `run_sim` --
@@ -65,13 +81,14 @@ environment to validate a `run_sim`-based rewrite against), so treat it as
 a `make`-based reference implementation, not a mirror of what GitHub
 Actions currently runs. It is provided for users who already run their
 own Jenkins controller and assumes Verilator/Icarus/GTKWave are already
-installed on the agent (unlike the GitHub Actions workflow, it does not
-install them itself).
+installed on the agent (unlike the three GitHub Actions workflows, it does
+not install them itself).
 
 ## Why GitHub Actions runs `run_sim` directly, not `make`
 
-Unlike Jenkins (still `make`-only, see above), the GitHub Actions workflow
-calls `./run_sim -lint` / `-suite <tier>` directly -- the same commands a
+Unlike Jenkins (still `make`-only, see above), all three GitHub Actions
+workflows call `./run_sim -lint` / `-suite <tier>` directly -- the same
+commands a
 developer runs locally after `source env.sh` (see
 `docs/flows/run_sim_flow.md`), rather than going through `make lint`/`make
 smoke`/etc. `make venv` is still a prerequisite step (creates the venv
