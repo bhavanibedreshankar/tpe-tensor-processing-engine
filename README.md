@@ -1,6 +1,17 @@
 # TPE -- Tensor Processing Engine
 
-[![TPE Regression](https://github.com/bhavanibedreshankar/tpe-tensor-processing-engine/actions/workflows/regression.yml/badge.svg)](https://github.com/bhavanibedreshankar/tpe-tensor-processing-engine/actions/workflows/regression.yml)
+[![Lint + Smoke](https://github.com/bhavanibedreshankar/tpe-tensor-processing-engine/actions/workflows/regression.yml/badge.svg?branch=main&event=push)](https://github.com/bhavanibedreshankar/tpe-tensor-processing-engine/actions/workflows/regression.yml?query=event%3Apush+branch%3Amain)
+[![Daily Regression](https://github.com/bhavanibedreshankar/tpe-tensor-processing-engine/actions/workflows/regression.yml/badge.svg?branch=main&event=schedule)](https://github.com/bhavanibedreshankar/tpe-tensor-processing-engine/actions/workflows/regression.yml?query=event%3Aschedule+branch%3Amain)
+[![Random Regression](https://github.com/bhavanibedreshankar/tpe-tensor-processing-engine/actions/workflows/regression.yml/badge.svg?branch=main&event=workflow_dispatch)](https://github.com/bhavanibedreshankar/tpe-tensor-processing-engine/actions/workflows/regression.yml?query=event%3Aworkflow_dispatch+branch%3Amain)
+
+Each badge/link is filtered by GitHub's own trigger-event query, matching
+how each tier actually runs (`docs/flows/ci_flow.md`): Lint + Smoke on
+every push/PR, Daily on the 06:00 UTC cron, Random on manual dispatch.
+Caveat: since the manual "Run workflow" button now has a suite picker
+(smoke/daily/random), a manually-dispatched smoke or daily run also
+counts toward the Random badge/link above -- GitHub's badge filtering
+goes by trigger *event* (`workflow_dispatch`), not by which suite was
+selected within it, and there's no finer-grained filter for that.
 
 **[→ Interactive project overview](https://bhavanibedreshankar.github.io/tpe-tensor-processing-engine/)**
 -- a visual, no-chip-background-required walkthrough of what this chip
