@@ -15,8 +15,14 @@ actually ran):
   of the old `make profile`/`tools/profiler.py` step yet, since that tool
   reads `tools/regression.py`'s `results.json` output, which `run_sim`
   doesn't produce, so it was dropped rather than left silently broken)
-- on manual `workflow_dispatch`: `./run_sim -suite random`, artifacts
-  uploaded from `$WORK_DIR/WORK/random/`
+- on manual `workflow_dispatch`: a required `suite` choice input
+  (`smoke`/`daily`/`random`, defaults to `random`) picks which single job
+  actually runs -- each job's `if` also matches
+  `workflow_dispatch` + its own suite name, alongside that job's normal
+  trigger (`push`/`pull_request` for smoke, `schedule` for daily), so the
+  Actions UI's "Run workflow" button (or `gh workflow run regression.yml
+  -f suite=smoke`) can trigger any tier on demand without waiting for a
+  push or the nightly cron
 
 Each job sets `WORK_DIR` to an **absolute** path
 (`${{ github.workspace }}/sim/logs/ci`) before calling `run_sim` --
