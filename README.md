@@ -1,5 +1,7 @@
 # TPE -- Tensor Processing Engine
 
+[![TPE Regression](https://github.com/bhavanibedreshankar/tpe-tensor-processing-engine/actions/workflows/regression.yml/badge.svg)](https://github.com/bhavanibedreshankar/tpe-tensor-processing-engine/actions/workflows/regression.yml)
+
 **[→ Interactive project overview](https://bhavanibedreshankar.github.io/tpe-tensor-processing-engine/)**
 -- a visual, no-chip-background-required walkthrough of what this chip
 does and how a command flows through it.
@@ -195,8 +197,10 @@ verif/           cocotb+pyuvm testbenches, SVA (bind files), coverage models, te
 tools/           Python infra: register-map generator, test generator, regression/
                  job-scheduler, coverage merger, profiler, linter, waves launcher, logger
 sim/             simulation build/run outputs (gitignored except .gitkeep)
-ci/              GitHub Actions workflow + reference Jenkinsfile
+.github/         GitHub Actions workflow (the CI actually running on this repo)
+ci/              reference Jenkinsfile (ci/jenkins/) -- not what GitHub Actions runs
 Makefile         top-level entry point; wraps everything above
+run_sim          unified test orchestrator (alongside Makefile, see docs/flows/run_sim_flow.md)
 ```
 
 ## Documentation index
@@ -210,4 +214,4 @@ Makefile         top-level entry point; wraps everything above
 - [Build flow](docs/flows/build_flow.md)
 - [Regression flow](docs/flows/regression_flow.md)
 - [run_sim flow](docs/flows/run_sim_flow.md) -- unified test orchestrator (options reference + examples)
-- [CI/CD flow](docs/flows/ci_flow.md)
+- [CI/CD flow](docs/flows/ci_flow.md) -- see also the [live GitHub Actions runs](https://github.com/bhavanibedreshankar/tpe-tensor-processing-engine/actions)

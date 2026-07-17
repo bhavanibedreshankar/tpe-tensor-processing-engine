@@ -13,6 +13,8 @@ jobs:
   lint-and-smoke:
     if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    env:
+      WORK_DIR: ${{ github.workspace }}/sim/logs/ci
     steps:
       - uses: actions/checkout@v4
 
@@ -51,22 +53,24 @@ jobs:
       - name: make venv
         run: make venv
 
-      - name: make lint
-        run: make lint
+      - name: run_sim -lint
+        run: ./run_sim -lint
 
-      - name: make smoke
-        run: make smoke
+      - name: run_sim -suite smoke
+        run: ./run_sim -suite smoke
 
       - name: Upload smoke regression results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: smoke-regression
-          path: sim/logs/smoke/
+          path: ${{ env.WORK_DIR }}/WORK/smoke/
 
   daily-regression:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
+    env:
+      WORK_DIR: ${{ github.workspace }}/sim/logs/ci
     steps:
       - uses: actions/checkout@v4
 
@@ -105,25 +109,29 @@ jobs:
       - name: make venv
         run: make venv
 
-      - name: make daily
-        run: make daily
-
-      - name: Merge coverage
-        run: make cov-merge SUITE=daily
-
-      - name: Profile
-        run: make profile SUITE=daily
+      - name: run_sim -suite daily
+        # -coverage merges verif/model coverage the same way `make cov-merge`
+        # used to (run_sim's -coverage flag calls tools/cov_merge.py itself,
+        # see tools/run_sim.py's report_coverage()); -annotate additionally
+        # writes an annotated coverage report alongside the merged summary.
+        # No run_sim equivalent of the old `make profile` (tools/profiler.py)
+        # step exists yet -- that tool reads regression.py's results.json,
+        # which run_sim doesn't produce, so it's dropped here rather than
+        # left silently broken.
+        run: ./run_sim -suite daily -coverage -annotate
 
       - name: Upload daily regression + coverage
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: daily-regression
-          path: sim/logs/daily/
+          path: ${{ env.WORK_DIR }}/WORK/daily/
 
   random-regression:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    env:
+      WORK_DIR: ${{ github.workspace }}/sim/logs/ci
     steps:
       - uses: actions/checkout@v4
 
@@ -162,12 +170,12 @@ jobs:
       - name: make venv
         run: make venv
 
-      - name: make random
-        run: make random
+      - name: run_sim -suite random
+        run: ./run_sim -suite random
 
       - name: Upload random regression results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: random-regression
-          path: sim/logs/random/
+          path: ${{ env.WORK_DIR }}/WORK/random/
