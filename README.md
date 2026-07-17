@@ -23,6 +23,8 @@
   treating it as a regression.
 - See [`docs/flows/ci_flow.md`](docs/flows/ci_flow.md) for the full flow.
 
+## Overview
+
 **[→ Interactive project overview](https://bhavanibedreshankar.github.io/tpe-tensor-processing-engine/)**
 -- a visual, no-chip-background-required walkthrough of what this chip
 does and how a command flows through it.
