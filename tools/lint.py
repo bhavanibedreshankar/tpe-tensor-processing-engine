@@ -56,7 +56,14 @@ BLOCKS = [
     ], "tpe_top", ["UNUSEDSIGNAL", "PINCONNECTEMPTY", "UNSIGNED", "WIDTHEXPAND", "WIDTHTRUNC"]),
 ]
 
-BASE_WNO = ["DECLFILENAME", "UNUSEDPARAM"]
+# BLKSEQ: some Verilator versions (seen on Ubuntu's apt package, not the
+# newer Homebrew build used for local dev) misattribute the mandatory
+# blocking assignments inside tpe_verbosity()'s static locals -- a
+# function body can only use '=', never '<=' -- as a sequential-process
+# violation when the function is inlined into a clocked caller. Waived
+# globally since it's a false positive on valid, portable SV, not a
+# block-specific concern.
+BASE_WNO = ["DECLFILENAME", "UNUSEDPARAM", "BLKSEQ"]
 
 
 def lint_one(name, sources, top_module, extra_wno):
