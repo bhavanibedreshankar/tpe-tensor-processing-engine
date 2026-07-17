@@ -45,10 +45,20 @@ jobs:
       - name: Add Verilator to PATH
         run: echo "$HOME/verilator-5.050/bin" >> "$GITHUB_PATH"
 
-      - name: Install GTKWave
+      - name: Install GTKWave + ccache
+        # ccache here is NOT about speeding up this job's own compiles --
+        # it's a hard dependency. Verilator's ./configure (in "Build
+        # Verilator 5.050 from source" above) auto-detects ccache and
+        # bakes `OBJCACHE = ccache` into every Vtop.mk it later generates.
+        # That step only runs on a cache miss, so on a cache-hit run the
+        # restored ~/verilator-5.050 still expects ccache on PATH even
+        # though nothing installed it -- every compile fails with
+        # "ccache: No such file or directory" (exit 127) otherwise.
+        # Installed unconditionally (not folded into the from-source
+        # step's own apt-get) so it's present on cache hits too.
         run: |
           sudo apt-get update
-          sudo apt-get install -y gtkwave
+          sudo apt-get install -y gtkwave ccache
 
       - name: make venv
         run: make venv
@@ -58,14 +68,6 @@ jobs:
 
       - name: run_sim -suite smoke
         run: ./run_sim -suite smoke
-
-      - name: DEBUG dump compile logs on failure
-        if: failure()
-        run: |
-          for f in "$WORK_DIR"/WORK/_cache/*/compile/build.log; do
-            echo "=== $f ==="
-            cat "$f"
-          done
 
       - name: Upload smoke regression results
         if: always()
@@ -109,10 +111,20 @@ jobs:
       - name: Add Verilator to PATH
         run: echo "$HOME/verilator-5.050/bin" >> "$GITHUB_PATH"
 
-      - name: Install GTKWave
+      - name: Install GTKWave + ccache
+        # ccache here is NOT about speeding up this job's own compiles --
+        # it's a hard dependency. Verilator's ./configure (in "Build
+        # Verilator 5.050 from source" above) auto-detects ccache and
+        # bakes `OBJCACHE = ccache` into every Vtop.mk it later generates.
+        # That step only runs on a cache miss, so on a cache-hit run the
+        # restored ~/verilator-5.050 still expects ccache on PATH even
+        # though nothing installed it -- every compile fails with
+        # "ccache: No such file or directory" (exit 127) otherwise.
+        # Installed unconditionally (not folded into the from-source
+        # step's own apt-get) so it's present on cache hits too.
         run: |
           sudo apt-get update
-          sudo apt-get install -y gtkwave
+          sudo apt-get install -y gtkwave ccache
 
       - name: make venv
         run: make venv
@@ -170,10 +182,20 @@ jobs:
       - name: Add Verilator to PATH
         run: echo "$HOME/verilator-5.050/bin" >> "$GITHUB_PATH"
 
-      - name: Install GTKWave
+      - name: Install GTKWave + ccache
+        # ccache here is NOT about speeding up this job's own compiles --
+        # it's a hard dependency. Verilator's ./configure (in "Build
+        # Verilator 5.050 from source" above) auto-detects ccache and
+        # bakes `OBJCACHE = ccache` into every Vtop.mk it later generates.
+        # That step only runs on a cache miss, so on a cache-hit run the
+        # restored ~/verilator-5.050 still expects ccache on PATH even
+        # though nothing installed it -- every compile fails with
+        # "ccache: No such file or directory" (exit 127) otherwise.
+        # Installed unconditionally (not folded into the from-source
+        # step's own apt-get) so it's present on cache hits too.
         run: |
           sudo apt-get update
-          sudo apt-get install -y gtkwave
+          sudo apt-get install -y gtkwave ccache
 
       - name: make venv
         run: make venv
