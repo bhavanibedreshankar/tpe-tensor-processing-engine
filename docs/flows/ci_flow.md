@@ -2,7 +2,10 @@
 
 ## GitHub Actions (primary, free)
 
-`ci/github/workflows/regression.yml`:
+`.github/workflows/regression.yml` (must live under `.github/workflows/`
+for GitHub Actions to discover it -- it previously sat under
+`ci/github/workflows/`, which is not a path Actions scans, so it never
+actually ran):
 - on every push/PR: `make lint` + `make smoke`, artifacts uploaded from
   `sim/logs/smoke/`
 - on a nightly schedule (06:00 UTC): `make daily` + `make cov-merge
@@ -16,9 +19,13 @@ secondary/cross-check simulator, not needed for the primary Verilator-based
 regression tiers CI runs) before `make venv`. This is the primary,
 "just works" CI for anyone who pushes this repo to GitHub -- no
 self-hosted infrastructure required, free tier is sufficient for a project
-this size. Not exercised from within this development session (no GitHub
-remote/Actions runner available here) -- validated by inspection against
-the same `make` targets proven locally, not by an actual CI run.
+this size. `tools/regression.py`'s exit code reflects infrastructure
+health only (nonzero solely on `ERROR`/`TIMEOUT`, i.e. the harness itself
+breaking) -- a `FAIL` against a catalogued bug in
+`docs/verification/bug_list.md` is expected and does not fail the
+`make smoke` step or the CI job, so the intentionally-injected RTL bugs
+show up as FAILs in the uploaded JUnit artifact without turning the
+push/PR check red.
 
 ## Jenkins (reference only, optional)
 
