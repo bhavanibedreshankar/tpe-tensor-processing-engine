@@ -14,9 +14,15 @@ actually ran):
 - on manual `workflow_dispatch`: `make random`, artifacts uploaded from
   `sim/logs/random/`
 
-Installs Verilator + GTKWave via `apt-get` (Icarus Verilog is this repo's
-secondary/cross-check simulator, not needed for the primary Verilator-based
-regression tiers CI runs) before `make venv`. This is the primary,
+Builds Verilator 5.050 from source (`actions/cache`-keyed on `runner.os`,
+so only the first run per cache generation pays the ~10-minute build --
+Ubuntu's `apt-get` package is version 5.020, which predates Verilator's
+`covergroup` support entirely and hard-errors on
+`verif/coverage/*_cov.sv`; README.md's toolchain table pins 5.050
+specifically, which is also what local development uses) plus GTKWave via
+`apt-get` (Icarus Verilog is this repo's secondary/cross-check simulator,
+not needed for the primary Verilator-based regression tiers CI runs)
+before `make venv`. This is the primary,
 "just works" CI for anyone who pushes this repo to GitHub -- no
 self-hosted infrastructure required, free tier is sufficient for a project
 this size. `tools/regression.py`'s exit code reflects infrastructure

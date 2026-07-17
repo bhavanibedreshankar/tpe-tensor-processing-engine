@@ -20,10 +20,33 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Verilator + GTKWave
+      - name: Cache Verilator 5.050 build
+        id: verilator-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/verilator-5.050
+          key: verilator-5.050-${{ runner.os }}-v1
+
+      - name: Build Verilator 5.050 from source
+        if: steps.verilator-cache.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y verilator gtkwave
+          sudo apt-get install -y git help2man perl python3 make autoconf g++ flex bison ccache \
+            libgoogle-perftools-dev numactl perl-doc libfl2 libfl-dev zlib1g zlib1g-dev
+          git clone --depth 1 --branch v5.050 https://github.com/verilator/verilator /tmp/verilator-src
+          cd /tmp/verilator-src
+          autoconf
+          ./configure --prefix="$HOME/verilator-5.050"
+          make -j"$(nproc)"
+          make install
+
+      - name: Add Verilator to PATH
+        run: echo "$HOME/verilator-5.050/bin" >> "$GITHUB_PATH"
+
+      - name: Install GTKWave
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gtkwave
 
       - name: make venv
         run: make venv
@@ -51,10 +74,33 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Verilator + GTKWave
+      - name: Cache Verilator 5.050 build
+        id: verilator-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/verilator-5.050
+          key: verilator-5.050-${{ runner.os }}-v1
+
+      - name: Build Verilator 5.050 from source
+        if: steps.verilator-cache.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y verilator gtkwave
+          sudo apt-get install -y git help2man perl python3 make autoconf g++ flex bison ccache \
+            libgoogle-perftools-dev numactl perl-doc libfl2 libfl-dev zlib1g zlib1g-dev
+          git clone --depth 1 --branch v5.050 https://github.com/verilator/verilator /tmp/verilator-src
+          cd /tmp/verilator-src
+          autoconf
+          ./configure --prefix="$HOME/verilator-5.050"
+          make -j"$(nproc)"
+          make install
+
+      - name: Add Verilator to PATH
+        run: echo "$HOME/verilator-5.050/bin" >> "$GITHUB_PATH"
+
+      - name: Install GTKWave
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gtkwave
 
       - name: make venv
         run: make venv
@@ -85,10 +131,33 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Verilator + GTKWave
+      - name: Cache Verilator 5.050 build
+        id: verilator-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/verilator-5.050
+          key: verilator-5.050-${{ runner.os }}-v1
+
+      - name: Build Verilator 5.050 from source
+        if: steps.verilator-cache.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y verilator gtkwave
+          sudo apt-get install -y git help2man perl python3 make autoconf g++ flex bison ccache \
+            libgoogle-perftools-dev numactl perl-doc libfl2 libfl-dev zlib1g zlib1g-dev
+          git clone --depth 1 --branch v5.050 https://github.com/verilator/verilator /tmp/verilator-src
+          cd /tmp/verilator-src
+          autoconf
+          ./configure --prefix="$HOME/verilator-5.050"
+          make -j"$(nproc)"
+          make install
+
+      - name: Add Verilator to PATH
+        run: echo "$HOME/verilator-5.050/bin" >> "$GITHUB_PATH"
+
+      - name: Install GTKWave
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gtkwave
 
       - name: make venv
         run: make venv
