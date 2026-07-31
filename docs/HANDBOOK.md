@@ -73,6 +73,15 @@ python3 tools/lint.py                  # same, direct
 python3 tools/lint.py --block tpe_dma  # lint one block only
 ```
 
+## Full-chip filelist / compiled-design dump
+
+```
+verilator --lint-only -Wall -f rtl/filelist.f --top-module tpe_top   # whole rtl/ tree, one -f
+verilator -cc -f rtl/filelist.f --top-module tpe_top
+```
+Full contents/rationale + the `--json-only` design-dump command:
+[`docs/flows/filelist_flow.md`](flows/filelist_flow.md).
+
 ## C++ golden model
 
 ```
